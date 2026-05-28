@@ -223,9 +223,9 @@ def go(step: str) -> None:
 # ---------------- career-map chart ----------------
 
 def render_career_map(all_matches: list[dict], top_matches: list[dict]) -> None:
-    """Scatter of all careers + labeled callouts in a clean vertical column on
-    the right. Each label connects to its dot with a thin gray leader line.
-    No overlapping labels, all 10 readable.
+    """Scatter of all careers in cosine space. Top 10 highlighted with a warm
+    heat gradient (deep red = #1, fading to gold = #10). No leader lines, no
+    side labels — the career list below the chart serves as the legend.
     """
     import matplotlib.pyplot as plt
     from matplotlib import rcParams
@@ -240,78 +240,70 @@ def render_career_map(all_matches: list[dict], top_matches: list[dict]) -> None:
                 m.get("content_cos", 0.0))
                for i, m in enumerate(top_matches, 1)]
 
-    fig, ax = plt.subplots(figsize=(9.5, 6.8), dpi=140)
+    fig, ax = plt.subplots(figsize=(9.5, 6.0), dpi=140)
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
 
-    # background cloud
-    ax.scatter(xs_all, ys_all, s=10, c="#dadad6", alpha=0.5,
+    # soft background cloud — every other career
+    ax.scatter(xs_all, ys_all, s=10, c="#e6e6e2", alpha=0.55,
                edgecolors="none", zorder=1)
 
     x_min, x_max = min(xs_all), max(xs_all)
     y_min, y_max = min(ys_all), max(ys_all)
-    x_pad = (x_max - x_min) * 0.05
-    y_pad = (y_max - y_min) * 0.10
-
-    # extend the right side substantially to hold the callout column
-    callout_x_start = x_max + (x_max - x_min) * 0.15   # where labels start
-    plot_x_max = x_max + (x_max - x_min) * 1.05        # right edge of plot
-    ax.set_xlim(x_min - x_pad, plot_x_max)
+    x_pad = (x_max - x_min) * 0.08
+    y_pad = (y_max - y_min) * 0.12
+    ax.set_xlim(x_min - x_pad, x_max + x_pad)
     ax.set_ylim(y_min - y_pad, y_max + y_pad)
 
-    # top 10 dots — small, in their actual positions
-    xs_top = [p[2] for p in top_pts]
-    ys_top = [p[3] for p in top_pts]
-    colors = ["#c5443d" if r == 1 else ("#444" if r <= 3 else "#222")
-              for (r, _, _, _) in top_pts]
-    ax.scatter(xs_top, ys_top, s=110, c=colors, edgecolors="white",
-               linewidths=1.5, zorder=3)
-    for (rank, _, x, y) in top_pts:
+    # warm heat gradient: deep red (#1) → orange → gold (#10)
+    heat_colors = [
+        "#b8312b",  # 1 — deep red
+        "#cb4a30",  # 2
+        "#dc6034",  # 3
+        "#e9763a",  # 4
+        "#f08c42",  # 5
+        "#f3a049",  # 6
+        "#f3b455",  # 7
+        "#efc665",  # 8
+        "#e8d27c",  # 9
+        "#dfd793",  # 10 — soft gold
+    ]
+
+    # dot sizes shrink slightly with rank for visual hierarchy
+    sizes = [340, 290, 260, 235, 215, 200, 185, 175, 165, 155]
+
+    # soft halo behind #1 so it pops even when buried in the cluster
+    _, _, x1, y1 = top_pts[0]
+    ax.scatter([x1], [y1], s=900, c="#b8312b", alpha=0.12,
+               edgecolors="none", zorder=2)
+
+    # paint from rank 10 down to 1 so #1 sits on top of any overlaps
+    for (rank, _, x, y), color, size in reversed(list(zip(top_pts, heat_colors, sizes))):
+        ax.scatter([x], [y], s=size, c=color, edgecolors="white",
+                   linewidths=2.0, zorder=3 + (10 - rank))
         ax.annotate(str(rank), (x, y), ha="center", va="center",
-                    fontsize=8, color="white", weight="bold", zorder=4)
+                    fontsize=11, color="white", weight="bold",
+                    zorder=20 + (10 - rank))
 
-    # arrange callout labels in RANK order (1 at top, 10 at bottom) so users
-    # read them naturally top-to-bottom matching the numbered list below.
-    # leader lines will sometimes cross but that's a fair trade for readability.
-    ordered = sorted(top_pts, key=lambda p: p[0])   # by rank
-    n = len(ordered)
-    y_top = y_max + y_pad * 0.5
-    y_bot = y_min - y_pad * 0.0
-    callout_ys = [y_top - i * (y_top - y_bot) / max(n - 1, 1) for i in range(n)]
-
-    def short(t):
-        return t if len(t) <= 50 else t[:48] + "…"
-
-    for (rank, title, x, y), cy in zip(ordered, callout_ys):
-        # leader line from dot to callout
-        ax.plot([x, callout_x_start - (x_max - x_min) * 0.01],
-                [y, cy], color="#cfcfcc", linewidth=0.8,
-                solid_capstyle="round", zorder=2)
-        # small dot at the callout end so it feels anchored
-        ax.scatter([callout_x_start - (x_max - x_min) * 0.01], [cy],
-                   s=12, c="#cfcfcc", edgecolors="none", zorder=2)
-        # the label itself — rank number + career name
-        ax.text(callout_x_start, cy,
-                f"  {rank:>2}.  {short(title)}",
-                va="center", ha="left",
-                fontsize=10,
-                color="#c5443d" if rank == 1 else "#222",
-                weight="bold" if rank == 1 else "normal",
-                zorder=5,
-                family="Georgia")
-
-    # axis cosmetics
+    # clean minimal axes
     ax.set_xlabel("cognitive shape match  →", fontsize=10,
-                  color="#444", labelpad=8)
+                  color="#666", labelpad=10)
     ax.set_ylabel("content / interest match  →", fontsize=10,
-                  color="#444", labelpad=8)
-    ax.tick_params(axis="both", colors="#888", labelsize=8)
+                  color="#666", labelpad=10)
+    ax.tick_params(axis="both", colors="#aaa", labelsize=8)
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
     for spine in ("left", "bottom"):
-        ax.spines[spine].set_color("#bbb")
+        ax.spines[spine].set_color("#ddd")
     ax.grid(True, which="major", linestyle="-", linewidth=0.5,
-            color="#eee", zorder=0)
+            color="#f3f3f0", zorder=0)
+
+    # subtle "best match" pointer in upper-right corner
+    ax.annotate("best match",
+                xy=(0.99, 0.97), xycoords="axes fraction",
+                ha="right", va="top",
+                fontsize=8, color="#b8312b", style="italic",
+                weight="bold")
 
     fig.tight_layout()
     st.pyplot(fig, use_container_width=True)
