@@ -66,6 +66,22 @@ PRETTY_LABEL = {
 }
 
 
+# ---------------- request metadata helpers ----------------
+
+def _get_user_agent() -> str | None:
+    """Best-effort extraction of the user-agent string. Streamlit exposes
+    this via st.context.headers in 1.37+. Returns None on older versions
+    or if header is missing.
+    """
+    try:
+        headers = st.context.headers
+        if headers:
+            return headers.get("User-Agent")
+    except Exception:
+        pass
+    return None
+
+
 # ---------------- API key plumbing ----------------
 
 def setup_api_key() -> bool:
@@ -191,9 +207,12 @@ if "step" not in st.session_state:
     st.session_state.step = "welcome"   # welcome | q0..q6 | loading | results
     st.session_state.answers = {}        # {qid: text}
     st.session_state.result = None       # full pipeline result
-    st.session_state.email = ""          # optional, captured on welcome screen
     st.session_state.started_at = None   # epoch seconds when "Begin" pressed
+    st.session_state.q_timings = {}      # {qid: epoch_seconds when answered}
+    st.session_state.q_visits = {}       # {qid: visit_count} — counts going back
     st.session_state.saved_id = None     # supabase row id after persist
+    st.session_state.email_sent = False  # has the user requested email send?
+    st.session_state.email_error = None  # last email submission error
 
 
 def go(step: str) -> None:
@@ -317,46 +336,19 @@ def screen_welcome() -> None:
         "</div>",
         unsafe_allow_html=True,
     )
-
-    # optional email field — if filled, we'll associate the session with it
-    st.markdown(
-        "<div style='color:#666; font-size:0.95rem; margin-bottom:0.4rem;'>"
-        "your email <span style='color:#999;'>(optional — only used so we "
-        "can email you your report)</span>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
-    email = st.text_input(
-        label="email",
-        value=st.session_state.get("email", ""),
-        key="email_input",
-        label_visibility="collapsed",
-        placeholder="you@example.com",
-    )
-
     if st.button("Begin", key="begin_btn"):
-        email_clean = email.strip()
-        # enforce one-session-per-email
-        if email_clean and db.email_already_used(email_clean):
-            st.markdown(
-                "<div style='margin-top:1.5rem; padding:1rem 1.2rem; "
-                "background:#fbeaea; border-left:3px solid #c5443d; "
-                "color:#7a2a25; border-radius:4px; line-height:1.5;'>"
-                "<b>this email has already been used.</b><br>"
-                "each person can take INT Intelligence once. if you'd like "
-                "to take it again, you can leave the email blank or use a "
-                "different one."
-                "</div>",
-                unsafe_allow_html=True,
-            )
-            return
-        st.session_state.email = email_clean
         st.session_state.started_at = time.time()
+        st.session_state.q_timings = {}
+        st.session_state.q_visits = {}
         go("q0")
 
 
 def screen_question(idx: int) -> None:
     qid, label, prompt = QUESTIONS[idx]
+
+    # count visits to this question (so we know if they went back/forth)
+    st.session_state.q_visits[qid] = st.session_state.q_visits.get(qid, 0) + 1
+
     st.markdown(f"<div class='q-tag'>{qid} · {label}</div>",
                 unsafe_allow_html=True)
     st.markdown(f"<div class='q-prompt'>{prompt}</div>",
@@ -376,6 +368,7 @@ def screen_question(idx: int) -> None:
         disabled = len(answer.strip()) < 30   # soft minimum
         if st.button(next_label, key=f"next_{qid}", disabled=disabled):
             st.session_state.answers[qid] = answer.strip()
+            st.session_state.q_timings[qid] = time.time()
             if idx < len(QUESTIONS) - 1:
                 go(f"q{idx+1}")
             else:
@@ -446,14 +439,47 @@ def screen_loading() -> None:
             duration = None
             if st.session_state.get("started_at"):
                 duration = int(time.time() - st.session_state.started_at)
+
+            # build per-question analytics
+            word_counts = {
+                qid: len(text.split())
+                for qid, text in st.session_state.answers.items()
+            }
+            char_counts = {
+                qid: len(text)
+                for qid, text in st.session_state.answers.items()
+            }
+            # compute time spent on each question (gap between submits)
+            time_per_q = {}
+            prev_t = st.session_state.get("started_at")
+            for qid, _, _ in QUESTIONS:
+                t = st.session_state.q_timings.get(qid)
+                if t and prev_t:
+                    time_per_q[qid] = int(t - prev_t)
+                    prev_t = t
+
+            metadata = {
+                "word_counts": word_counts,
+                "char_counts": char_counts,
+                "time_per_question_seconds": time_per_q,
+                "question_visits": dict(st.session_state.q_visits),  # how often they went back
+                "used_content_embedding": used_content,
+                "top_intelligence": sorted(
+                    profile.items(), key=lambda kv: -kv[1]
+                )[0][0],
+                "started_at_epoch": st.session_state.get("started_at"),
+                "finished_at_epoch": time.time(),
+            }
+
             saved_id = db.save_session(
                 answers=st.session_state.answers,
                 profile=profile,
                 scored=scored,
                 matches=all_matches[:10],
-                email=st.session_state.get("email") or None,
-                user_agent=None,   # streamlit doesn't expose UA easily; could add later
+                email=None,             # captured later on results screen
+                user_agent=_get_user_agent(),
                 duration_seconds=duration,
+                metadata=metadata,
             )
             st.session_state.saved_id = saved_id
         except Exception as e:
@@ -547,11 +573,69 @@ def screen_results() -> None:
             unsafe_allow_html=True,
         )
 
+    # ---- email capture for report sending ----
+    st.markdown("<hr style='margin:3rem 0; border:none; border-top:1px solid #ddd;'>",
+                unsafe_allow_html=True)
+    st.markdown(f"<h2 style='margin-bottom:0.2rem;'>get this report by email</h2>",
+                unsafe_allow_html=True)
+    st.markdown("<p style='color:#666; margin-bottom:1.5rem;'>"
+                "Want this report sent to you as a PDF? Enter your email below. "
+                "Each email can only be used once."
+                "</p>", unsafe_allow_html=True)
+
+    if st.session_state.get("email_sent"):
+        st.markdown(
+            "<div style='padding:1rem 1.2rem; background:#eaf5ea; "
+            "border-left:3px solid #2e8b57; color:#1a4f1a; "
+            "border-radius:4px; line-height:1.5;'>"
+            "<b>✓ Got it.</b> Your report request has been recorded. "
+            "We'll email it to you shortly."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        email_input = st.text_input(
+            label="email",
+            key="results_email_input",
+            label_visibility="collapsed",
+            placeholder="you@example.com",
+        )
+        if st.session_state.get("email_error"):
+            st.markdown(
+                f"<div style='margin-top:0.5rem; padding:0.8rem 1rem; "
+                f"background:#fbeaea; border-left:3px solid #c5443d; "
+                f"color:#7a2a25; border-radius:4px; line-height:1.5;'>"
+                f"{st.session_state.email_error}"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        if st.button("Send report to my email", key="send_report_btn"):
+            sid = st.session_state.get("saved_id")
+            if not sid:
+                st.session_state.email_error = (
+                    "Couldn't record this — your session wasn't saved. "
+                    "Please try again."
+                )
+                st.rerun()
+            else:
+                ok, msg = db.request_report_email(sid, email_input)
+                if ok:
+                    st.session_state.email_sent = True
+                    st.session_state.email_error = None
+                else:
+                    st.session_state.email_error = msg
+                st.rerun()
+
     st.markdown("<br><br>", unsafe_allow_html=True)
     if st.button("Start over", key="restart_btn"):
         st.session_state.step = "welcome"
         st.session_state.answers = {}
         st.session_state.result = None
+        st.session_state.saved_id = None
+        st.session_state.email_sent = False
+        st.session_state.email_error = None
+        st.session_state.q_timings = {}
+        st.session_state.q_visits = {}
         st.rerun()
 
 

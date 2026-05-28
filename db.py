@@ -84,6 +84,7 @@ def save_session(
     email: str | None = None,
     user_agent: str | None = None,
     duration_seconds: int | None = None,
+    metadata: dict | None = None,
 ) -> str | None:
     """Insert one completed session. Returns the inserted row's id, or None
     if persistence is disabled / failed. Never raises — failure is silent
@@ -93,9 +94,10 @@ def save_session(
     profile: 8-dim percent breakdown summing to 100
     scored: {intel: {"score": int, "evidence": str}} from the LLM
     matches: top-N list of {soc, title, match_pct, ...} dicts
-    email: optional user email
+    email: optional user email (usually None at save time, added later)
     user_agent: optional browser UA string
-    duration_seconds: optional time spent on the questionnaire
+    duration_seconds: optional total time spent
+    metadata: optional dict of analytics (word counts, per-question timing, etc.)
     """
     client = get_client()
     if client is None:
@@ -134,6 +136,7 @@ def save_session(
         "top_matches_json": matches_slim,
         "user_agent": user_agent,
         "duration_seconds": duration_seconds,
+        "metadata": metadata or {},
     }
 
     try:
@@ -143,6 +146,59 @@ def save_session(
     except Exception as e:
         print(f"[db] save_session failed: {e}")
     return None
+
+
+def request_report_email(session_id: str, email: str) -> tuple[bool, str]:
+    """Called from the results screen when the user types an email to receive
+    their report. Three outcomes:
+       (True, ok-message)  — email accepted, recorded on session, ready to send
+       (False, error-msg)  — email already used to receive a report
+       (False, error-msg)  — DB error / invalid input
+
+    The actual email-sending is handled separately. This just records intent
+    so the same email can't be re-used.
+    """
+    email_clean = (email or "").strip().lower()
+    if "@" not in email_clean or "." not in email_clean.split("@")[-1]:
+        return False, "Please enter a valid email address."
+
+    client = get_client()
+    if client is None:
+        return False, "Database not available right now. Try again in a minute."
+
+    try:
+        # check if this email has already received a report
+        existing = (client.table("sessions")
+                    .select("id")
+                    .eq("email", email_clean)
+                    .not_.is_("report_sent_at", "null")
+                    .limit(1)
+                    .execute())
+        if existing.data:
+            return False, (
+                "This email has already received a report. Each email can only "
+                "be used once."
+            )
+
+        # mark the session with the email and the send-request timestamp
+        from datetime import datetime, timezone
+        now_iso = datetime.now(timezone.utc).isoformat()
+        (client.table("sessions")
+         .update({
+             "email": email_clean,
+             "report_sent_to": email_clean,
+             "report_sent_at": now_iso,
+         })
+         .eq("id", session_id)
+         .execute())
+
+        return True, (
+            "Your report request is recorded. (Email delivery will be enabled "
+            "soon — for now your results stay accessible here.)"
+        )
+    except Exception as e:
+        print(f"[db] request_report_email failed: {e}")
+        return False, "Something went wrong. Please try again."
 
 
 def is_enabled() -> bool:
