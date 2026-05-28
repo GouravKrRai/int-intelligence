@@ -200,65 +200,51 @@ def go(step: str) -> None:
 # ---------------- career-map chart ----------------
 
 def render_career_map(all_matches: list[dict], top_matches: list[dict]) -> None:
-    """Scatter plot of all 1016 careers on (cognitive-shape, content-meaning) axes.
-    Uses RAW cosines — not rank-normalized — so top 10 dots spread out visibly
-    instead of clustering at (1,1). Axis ranges auto-fit to the data.
+    """Horizontal bar chart of the top 10 careers, ranked by match %.
+    #1 highlighted in red. Clean, scannable, anyone gets it instantly.
     """
     import matplotlib.pyplot as plt
     from matplotlib import rcParams
 
-    # raw cosines give real spread; rank-normalized collapses top 10 to ~(1,1)
-    xs_all = [m.get("gardner_cos", 0.0) for m in all_matches]
-    ys_all = [m.get("content_cos", 0.0) for m in all_matches]
-
-    top_ranked = [(i, m) for i, m in enumerate(top_matches, 1)]
-    xs_top = [m.get("gardner_cos", 0.0) for _, m in top_ranked]
-    ys_top = [m.get("content_cos", 0.0) for _, m in top_ranked]
-
-    # auto-fit axis limits with 10% padding around the union of all data
-    x_min, x_max = min(xs_all + xs_top), max(xs_all + xs_top)
-    y_min, y_max = min(ys_all + ys_top), max(ys_all + ys_top)
-    x_pad = (x_max - x_min) * 0.08 if x_max > x_min else 0.1
-    y_pad = (y_max - y_min) * 0.08 if y_max > y_min else 0.1
+    # use the top 10 only; reverse so #1 lands at the top of the chart
+    titles = [m["title"] for m in top_matches][::-1]
+    matches = [m["match_pct"] for m in top_matches][::-1]
+    y_pos = list(range(len(titles)))
 
     rcParams["font.family"] = "Georgia, serif"
-    fig, ax = plt.subplots(figsize=(7.2, 6.0), dpi=140)
+    fig, ax = plt.subplots(figsize=(8, 6), dpi=140)
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
 
-    # background — every career as a soft gray dot
-    ax.scatter(xs_all, ys_all, s=10, c="#d8d8d4", alpha=0.55,
-               edgecolors="none", zorder=1)
+    # all bars dark, except the #1 (last in reversed list) in accent red
+    colors = ["#222"] * len(titles)
+    colors[-1] = "#c5443d"   # highlight the top match
 
-    # top 10 — dark dots, big enough to hold a number inside
-    ax.scatter(xs_top, ys_top, s=160, c="#222", edgecolors="white",
-               linewidths=1.5, zorder=3)
+    ax.barh(y_pos, matches, color=colors, height=0.6,
+            edgecolor="white", linewidth=0)
 
-    # rank number painted inside each top dot
-    for (i, m), x, y in zip(top_ranked, xs_top, ys_top):
-        ax.annotate(str(i), (x, y), ha="center", va="center",
-                    fontsize=10, color="white", weight="bold", zorder=4)
+    # axis labels = career names
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(titles, fontsize=10, color="#222")
 
-    # axis cosmetics
-    ax.set_xlim(x_min - x_pad, x_max + x_pad)
-    ax.set_ylim(y_min - y_pad, y_max + y_pad)
-    ax.set_xlabel("cognitive shape match  →  (cosine similarity)",
-                  fontsize=10, color="#444", labelpad=8)
-    ax.set_ylabel("content / interest match  →  (cosine similarity)",
-                  fontsize=10, color="#444", labelpad=8)
-    ax.tick_params(axis="both", colors="#888", labelsize=8)
-    for spine in ("top", "right"):
+    # x axis from 5 below smallest match to 100 — clean window
+    x_min = max(50.0, min(matches) - 5.0)
+    ax.set_xlim(x_min, 100.0)
+    ax.set_xlabel("match  %", fontsize=10, color="#444", labelpad=8)
+
+    # value labels at the end of each bar
+    for y, v in zip(y_pos, matches):
+        ax.text(v + (100 - x_min) * 0.01, y, f"{v:.1f}%",
+                va="center", fontsize=9, color="#444")
+
+    # clean spines + grid
+    for spine in ("top", "right", "left"):
         ax.spines[spine].set_visible(False)
-    for spine in ("left", "bottom"):
-        ax.spines[spine].set_color("#bbb")
-
-    ax.grid(True, which="major", linestyle="-", linewidth=0.5,
-            color="#eee", zorder=0)
-
-    # small annotation in the corner explaining the upper-right is best
-    ax.text(0.98, 0.02, "↗  better match",
-            transform=ax.transAxes, fontsize=8, color="#999",
-            ha="right", va="bottom", style="italic")
+    ax.spines["bottom"].set_color("#bbb")
+    ax.tick_params(axis="x", colors="#888", labelsize=8)
+    ax.tick_params(axis="y", length=0)
+    ax.grid(axis="x", linestyle="-", linewidth=0.5, color="#eee", zorder=0)
+    ax.set_axisbelow(True)
 
     fig.tight_layout()
     st.pyplot(fig, use_container_width=True)
@@ -427,17 +413,15 @@ def screen_results() -> None:
                 unsafe_allow_html=True,
             )
 
-    # ---- career map (2D scatter of all 1016 careers) ----
+    # ---- top 10 careers as a horizontal bar chart ----
     if r.get("all_matches"):
         st.markdown("<hr style='margin:3rem 0; border:none; border-top:1px solid #ddd;'>",
                     unsafe_allow_html=True)
-        st.markdown(f"<h2 style='margin-bottom:0.2rem;'>your career map</h2>",
+        st.markdown(f"<h2 style='margin-bottom:0.2rem;'>your top 10 match</h2>",
                     unsafe_allow_html=True)
         st.markdown("<p style='color:#666; margin-bottom:1.5rem;'>"
-                    "every career we know, plotted on two axes: how well it fits "
-                    "the shape of your mind (horizontal), and how close its day-to-day "
-                    "matches what you wrote about (vertical). the 10 nearest careers "
-                    "are highlighted."
+                    "the careers closest to the shape of your mind, ranked by "
+                    "how well they fit. your #1 is highlighted."
                     "</p>", unsafe_allow_html=True)
         render_career_map(r["all_matches"], r["matches"])
 
