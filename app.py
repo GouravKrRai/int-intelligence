@@ -201,65 +201,64 @@ def go(step: str) -> None:
 
 def render_career_map(all_matches: list[dict], top_matches: list[dict]) -> None:
     """Scatter plot of all 1016 careers on (cognitive-shape, content-meaning) axes.
-    Top 10 highlighted with labels. The user is at (1.0, 1.0) — perfect match w/ self.
+    Uses RAW cosines — not rank-normalized — so top 10 dots spread out visibly
+    instead of clustering at (1,1). Axis ranges auto-fit to the data.
     """
     import matplotlib.pyplot as plt
     from matplotlib import rcParams
 
-    # we need the rank-normalized coords from each match
-    # (gardner_rank, content_rank) are added when match() runs with normalize="rank"
-    xs_all, ys_all = [], []
-    for m in all_matches:
-        xs_all.append(m.get("gardner_rank", 0.0))
-        ys_all.append(m.get("content_rank", 0.0))
+    # raw cosines give real spread; rank-normalized collapses top 10 to ~(1,1)
+    xs_all = [m.get("gardner_cos", 0.0) for m in all_matches]
+    ys_all = [m.get("content_cos", 0.0) for m in all_matches]
 
-    # ordered list of top 10 with their rank numbers
     top_ranked = [(i, m) for i, m in enumerate(top_matches, 1)]
+    xs_top = [m.get("gardner_cos", 0.0) for _, m in top_ranked]
+    ys_top = [m.get("content_cos", 0.0) for _, m in top_ranked]
+
+    # auto-fit axis limits with 10% padding around the union of all data
+    x_min, x_max = min(xs_all + xs_top), max(xs_all + xs_top)
+    y_min, y_max = min(ys_all + ys_top), max(ys_all + ys_top)
+    x_pad = (x_max - x_min) * 0.08 if x_max > x_min else 0.1
+    y_pad = (y_max - y_min) * 0.08 if y_max > y_min else 0.1
 
     rcParams["font.family"] = "Georgia, serif"
     fig, ax = plt.subplots(figsize=(7.2, 6.0), dpi=140)
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
 
-    # all careers — light cloud
+    # background — every career as a soft gray dot
     ax.scatter(xs_all, ys_all, s=10, c="#d8d8d4", alpha=0.55,
                edgecolors="none", zorder=1)
 
-    # top matches — dark, larger
-    xs_top = [m.get("gardner_rank", 0.0) for _, m in top_ranked]
-    ys_top = [m.get("content_rank", 0.0) for _, m in top_ranked]
-    ax.scatter(xs_top, ys_top, s=140, c="#222", edgecolors="white",
+    # top 10 — dark dots, big enough to hold a number inside
+    ax.scatter(xs_top, ys_top, s=160, c="#222", edgecolors="white",
                linewidths=1.5, zorder=3)
 
-    # rank number INSIDE each top dot (clean, no overlap)
+    # rank number painted inside each top dot
     for (i, m), x, y in zip(top_ranked, xs_top, ys_top):
         ax.annotate(str(i), (x, y), ha="center", va="center",
-                    fontsize=9, color="white", weight="bold", zorder=4)
-
-    # user is the implicit (1, 1) — show the "you" anchor
-    ax.scatter([1.0], [1.0], s=200, marker="*", c="#c5443d",
-               edgecolors="white", linewidths=1.5, zorder=5)
-    ax.annotate("you", (1.0, 1.0), xytext=(10, -3), textcoords="offset points",
-                fontsize=11, color="#c5443d", weight="bold", zorder=5)
+                    fontsize=10, color="white", weight="bold", zorder=4)
 
     # axis cosmetics
-    ax.set_xlim(-0.02, 1.08)
-    ax.set_ylim(-0.02, 1.08)
-    ax.set_xlabel("cognitive shape match  →", fontsize=10, color="#444",
-                  labelpad=8)
-    ax.set_ylabel("content / interest match  →", fontsize=10, color="#444",
-                  labelpad=8)
-    ax.set_xticks([0, 0.25, 0.5, 0.75, 1.0])
-    ax.set_yticks([0, 0.25, 0.5, 0.75, 1.0])
+    ax.set_xlim(x_min - x_pad, x_max + x_pad)
+    ax.set_ylim(y_min - y_pad, y_max + y_pad)
+    ax.set_xlabel("cognitive shape match  →  (cosine similarity)",
+                  fontsize=10, color="#444", labelpad=8)
+    ax.set_ylabel("content / interest match  →  (cosine similarity)",
+                  fontsize=10, color="#444", labelpad=8)
     ax.tick_params(axis="both", colors="#888", labelsize=8)
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
     for spine in ("left", "bottom"):
         ax.spines[spine].set_color("#bbb")
 
-    # subtle grid
     ax.grid(True, which="major", linestyle="-", linewidth=0.5,
             color="#eee", zorder=0)
+
+    # small annotation in the corner explaining the upper-right is best
+    ax.text(0.98, 0.02, "↗  better match",
+            transform=ax.transAxes, fontsize=8, color="#999",
+            ha="right", va="bottom", style="italic")
 
     fig.tight_layout()
     st.pyplot(fig, use_container_width=True)
