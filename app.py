@@ -23,6 +23,7 @@ import streamlit as st
 # local modules
 from scorer import score as llm_score, to_percentages, embed_essays, INTEL
 from match import match as do_match, EMB_NPY
+import db
 
 # ---------------- config ----------------
 
@@ -190,6 +191,9 @@ if "step" not in st.session_state:
     st.session_state.step = "welcome"   # welcome | q0..q6 | loading | results
     st.session_state.answers = {}        # {qid: text}
     st.session_state.result = None       # full pipeline result
+    st.session_state.email = ""          # optional, captured on welcome screen
+    st.session_state.started_at = None   # epoch seconds when "Begin" pressed
+    st.session_state.saved_id = None     # supabase row id after persist
 
 
 def go(step: str) -> None:
@@ -313,7 +317,26 @@ def screen_welcome() -> None:
         "</div>",
         unsafe_allow_html=True,
     )
+
+    # optional email field — if filled, we'll associate the session with it
+    st.markdown(
+        "<div style='color:#666; font-size:0.95rem; margin-bottom:0.4rem;'>"
+        "your email <span style='color:#999;'>(optional — only used so we "
+        "can email you your report)</span>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    email = st.text_input(
+        label="email",
+        value=st.session_state.get("email", ""),
+        key="email_input",
+        label_visibility="collapsed",
+        placeholder="you@example.com",
+    )
+
     if st.button("Begin", key="begin_btn"):
+        st.session_state.email = email.strip()
+        st.session_state.started_at = time.time()
         go("q0")
 
 
@@ -402,6 +425,26 @@ def screen_loading() -> None:
             "all_matches": all_matches,            # used by the career-map chart
             "used_content": used_content,
         }
+
+        # 4. persist to Supabase (fail-soft — never blocks the user)
+        try:
+            duration = None
+            if st.session_state.get("started_at"):
+                duration = int(time.time() - st.session_state.started_at)
+            saved_id = db.save_session(
+                answers=st.session_state.answers,
+                profile=profile,
+                scored=scored,
+                matches=all_matches[:10],
+                email=st.session_state.get("email") or None,
+                user_agent=None,   # streamlit doesn't expose UA easily; could add later
+                duration_seconds=duration,
+            )
+            st.session_state.saved_id = saved_id
+        except Exception as e:
+            # explicitly silent — the user must not see DB errors
+            print(f"[app] save_session error: {e}")
+
         go("results")
     except Exception as e:
         st.error(f"Something went wrong while reading your answers:\n\n```\n{e}\n```")

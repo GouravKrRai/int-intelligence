@@ -4,3 +4,5 @@ numpy>=1.26
 matplotlib>=3.8
 sentence-transformers>=5.0
 torch>=2.2
+supabase>=2.30
+python-dotenv>=1.0
