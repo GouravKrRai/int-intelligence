@@ -74,6 +74,92 @@ def get_client():
         return None
 
 
+# ---------------- progressive save (refresh persistence) ----------------
+
+# mapping from QID (Q1..Q7) to the column name used in the sessions table
+_QID_TO_COL = {
+    "Q1": "q1_place",
+    "Q2": "q2_habit",
+    "Q3": "q3_explain",
+    "Q4": "q4_conflict",
+    "Q5": "q5_sound",
+    "Q6": "q6_body",
+    "Q7": "q7_unworded",
+}
+_COL_TO_QID = {v: k for k, v in _QID_TO_COL.items()}
+
+
+def init_pending_session(user_agent: str | None = None) -> str | None:
+    """Create an empty session row when the user clicks Begin. Returns the
+    new row id (UUID) which we then put in the URL as ?s=<id> so that page
+    refreshes can hydrate from this row.
+    """
+    client = get_client()
+    if client is None:
+        return None
+    try:
+        result = client.table("sessions").insert({
+            "user_agent": user_agent,
+            "metadata": {"current_step": "q0", "pending": True},
+        }).execute()
+        if result.data:
+            return result.data[0].get("id")
+    except Exception as e:
+        print(f"[db] init_pending_session failed: {e}")
+    return None
+
+
+def update_progress(session_id: str, step: str, answers: dict[str, str]) -> None:
+    """Update an existing session row with the latest step + answers. Called
+    on every Continue/Back click. Silent on failure so the app keeps working
+    even if the DB is briefly unreachable.
+    """
+    client = get_client()
+    if client is None or not session_id:
+        return
+    try:
+        update: dict[str, Any] = {}
+        for qid, text in (answers or {}).items():
+            col = _QID_TO_COL.get(qid)
+            if col and text:
+                update[col] = text
+        update["metadata"] = {"current_step": step, "pending": True}
+        client.table("sessions").update(update).eq("id", session_id).execute()
+    except Exception as e:
+        print(f"[db] update_progress failed: {e}")
+
+
+def load_progress(session_id: str) -> dict | None:
+    """Fetch a session by id and return its state in a form that app.py can
+    use to rehydrate st.session_state. Returns None if not found.
+    """
+    client = get_client()
+    if client is None or not session_id:
+        return None
+    try:
+        result = client.table("sessions").select("*").eq("id", session_id).limit(1).execute()
+        if not result.data:
+            return None
+        row = result.data[0]
+        # reconstruct the QID-keyed answers dict
+        answers: dict[str, str] = {}
+        for col, qid in _COL_TO_QID.items():
+            v = row.get(col)
+            if v:
+                answers[qid] = v
+        meta = row.get("metadata") or {}
+        step = meta.get("current_step", "welcome")
+        return {
+            "step": step,
+            "answers": answers,
+            "saved_id": row["id"],
+            "has_results": bool(row.get("top_matches_json")),
+        }
+    except Exception as e:
+        print(f"[db] load_progress failed: {e}")
+        return None
+
+
 # ---------------- session save ----------------
 
 def save_session(
@@ -85,10 +171,13 @@ def save_session(
     user_agent: str | None = None,
     duration_seconds: int | None = None,
     metadata: dict | None = None,
+    existing_id: str | None = None,
 ) -> str | None:
-    """Insert one completed session. Returns the inserted row's id, or None
-    if persistence is disabled / failed. Never raises — failure is silent
-    to keep the user-facing app robust.
+    """Persist a completed session. If existing_id is given (the typical case
+    now, since init_pending_session is called when user clicks Begin), UPDATE
+    that row with final results. Otherwise INSERT a new row.
+
+    Returns the row id on success, None on failure.
 
     answers: keyed by QID ("Q1", "Q2", ...) → user's essay text
     profile: 8-dim percent breakdown summing to 100
@@ -98,6 +187,7 @@ def save_session(
     user_agent: optional browser UA string
     duration_seconds: optional total time spent
     metadata: optional dict of analytics (word counts, per-question timing, etc.)
+    existing_id: id of a pre-created pending row to UPDATE in place
     """
     client = get_client()
     if client is None:
@@ -122,6 +212,11 @@ def save_session(
     # normalize email to lowercase (so john@x.com and JOHN@X.COM count as same)
     email_clean = email.strip().lower() if email and email.strip() else None
 
+    # merge any pending metadata flag with the analytics metadata
+    final_metadata = dict(metadata or {})
+    final_metadata["current_step"] = "results"
+    final_metadata["pending"] = False
+
     row: dict[str, Any] = {
         "email": email_clean,
         "q1_place": answers.get("Q1") or None,
@@ -136,10 +231,15 @@ def save_session(
         "top_matches_json": matches_slim,
         "user_agent": user_agent,
         "duration_seconds": duration_seconds,
-        "metadata": metadata or {},
+        "metadata": final_metadata,
     }
 
     try:
+        if existing_id:
+            result = client.table("sessions").update(row).eq("id", existing_id).execute()
+            if result.data:
+                return existing_id
+            # if update returned nothing, fall through to insert (row may not exist)
         result = client.table("sessions").insert(row).execute()
         if result.data:
             return result.data[0].get("id")

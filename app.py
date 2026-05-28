@@ -201,74 +201,17 @@ body, .stMarkdown, .stTextArea textarea {font-family: 'Georgia', serif;}
 """, unsafe_allow_html=True)
 
 
-# ---------------- session state + browser persistence ----------------
+# ---------------- session state + URL/Supabase persistence ----------------
 
-# Browser localStorage bridge so refresh doesn't blow away progress.
-# Falls back to in-memory-only if the package isn't available.
-try:
-    from streamlit_local_storage import LocalStorage
-    _LS = LocalStorage()
-    _LS_OK = True
-except Exception:
-    _LS = None
-    _LS_OK = False
+# Refresh-persistence strategy:
+#   - Each user session gets a row in Supabase from the moment they click Begin.
+#   - The row id (uuid) is placed in the URL as ?s=<id>.
+#   - On every step transition, db.update_progress() syncs current step + answers.
+#   - On page refresh, the URL ?s=<id> is read first; the row is fetched from
+#     Supabase and used to rehydrate the in-memory session_state.
+#   - No localStorage, no async timing issues. URL is the source of truth.
 
-_LS_KEY = "int_intelligence_state_v1"
-
-# Fields we persist across refresh. NOT result/all_matches — those are big
-# and can be re-rendered from saved_id if needed.
-_PERSIST_FIELDS = ("step", "answers", "saved_id", "started_at",
-                   "q_timings", "q_visits", "email_sent")
-
-
-def _hydrate_from_storage() -> None:
-    """Restore state from browser localStorage on first render of a session.
-    Only runs once per browser session. Safe to call repeatedly."""
-    if st.session_state.get("_hydrated"):
-        return
-    st.session_state._hydrated = True   # mark even if hydration fails
-
-    if not _LS_OK:
-        return
-    try:
-        import json
-        raw = _LS.getItem(_LS_KEY)
-        if not raw:
-            return
-        data = json.loads(raw) if isinstance(raw, str) else raw
-        if not isinstance(data, dict):
-            return
-        for k in _PERSIST_FIELDS:
-            if k in data and data[k] is not None:
-                st.session_state[k] = data[k]
-    except Exception:
-        pass
-
-
-def _save_to_storage() -> None:
-    """Snapshot the lightweight state fields to localStorage. Called after
-    every state mutation (step transition or answer save)."""
-    if not _LS_OK:
-        return
-    try:
-        import json
-        snapshot = {k: st.session_state.get(k) for k in _PERSIST_FIELDS}
-        _LS.setItem(_LS_KEY, json.dumps(snapshot))
-    except Exception:
-        pass
-
-
-def _clear_storage() -> None:
-    """Wipe the localStorage entry — called on Start Over."""
-    if not _LS_OK:
-        return
-    try:
-        _LS.deleteItem(_LS_KEY)
-    except Exception:
-        pass
-
-
-# Default session_state values (used only if localStorage has no saved entry)
+# Default session_state values
 if "step" not in st.session_state:
     st.session_state.step = "welcome"   # welcome | q0..q6 | loading | results
     st.session_state.answers = {}        # {qid: text}
@@ -280,15 +223,69 @@ if "step" not in st.session_state:
     st.session_state.email_sent = False  # has the user requested email send?
     st.session_state.email_error = None  # last email submission error
 
-# Try to hydrate from browser localStorage. If found, this overrides the
-# defaults above. Must run after the defaults are set so missing keys exist.
-_hydrate_from_storage()
+
+def _hydrate_from_url() -> None:
+    """If the URL contains ?s=<session_id>, fetch the row from Supabase and
+    rehydrate the in-memory state. Only runs once per browser session."""
+    if st.session_state.get("_url_hydrated"):
+        return
+    st.session_state._url_hydrated = True
+
+    try:
+        url_sid = st.query_params.get("s")
+    except Exception:
+        url_sid = None
+    if not url_sid:
+        return
+
+    saved = db.load_progress(url_sid)
+    if not saved:
+        # row not found (maybe deleted) — clear stale URL param
+        try:
+            del st.query_params["s"]
+        except Exception:
+            pass
+        return
+
+    st.session_state.saved_id = saved.get("saved_id")
+    st.session_state.answers = saved.get("answers") or {}
+
+    # If results were already computed, route to results (where the pipeline
+    # will be silently re-run from the saved answers to repopulate matches).
+    # Otherwise route to whatever step they were last on.
+    step = saved.get("step") or "welcome"
+    if step in {"welcome", "loading", "results"}:
+        st.session_state.step = step
+    elif step.startswith("q"):
+        st.session_state.step = step
+    else:
+        st.session_state.step = "welcome"
+
+
+# Run URL hydration once at startup
+_hydrate_from_url()
 
 
 def go(step: str) -> None:
+    """Transition to a new step. Persists step + answers to Supabase if we
+    have a pending session id, so a page refresh can rehydrate from the DB."""
     st.session_state.step = step
-    _save_to_storage()
+    sid = st.session_state.get("saved_id")
+    if sid:
+        try:
+            db.update_progress(sid, step, st.session_state.get("answers") or {})
+        except Exception:
+            pass
     st.rerun()
+
+
+def _clear_storage() -> None:
+    """Wipe URL ?s param when starting over."""
+    try:
+        if "s" in st.query_params:
+            del st.query_params["s"]
+    except Exception:
+        pass
 
 
 # ---------------- career-map chart ----------------
@@ -403,6 +400,17 @@ def screen_welcome() -> None:
         st.session_state.started_at = time.time()
         st.session_state.q_timings = {}
         st.session_state.q_visits = {}
+        # Create the pending Supabase row right now and stash its id in the
+        # URL. This lets refresh-during-test recover the session by reading
+        # ?s=<id> back out of the URL on next page load.
+        if not st.session_state.get("saved_id"):
+            sid = db.init_pending_session(user_agent=_get_user_agent())
+            if sid:
+                st.session_state.saved_id = sid
+                try:
+                    st.query_params["s"] = sid
+                except Exception:
+                    pass
         go("q0")
 
 
@@ -534,6 +542,9 @@ def screen_loading() -> None:
                 "finished_at_epoch": time.time(),
             }
 
+            # Pass existing_id so we UPDATE the pending row created on Begin
+            # rather than inserting a duplicate. Falls back to insert if the
+            # pending row is somehow missing.
             saved_id = db.save_session(
                 answers=st.session_state.answers,
                 profile=profile,
@@ -543,8 +554,15 @@ def screen_loading() -> None:
                 user_agent=_get_user_agent(),
                 duration_seconds=duration,
                 metadata=metadata,
+                existing_id=st.session_state.get("saved_id"),
             )
-            st.session_state.saved_id = saved_id
+            if saved_id:
+                st.session_state.saved_id = saved_id
+                # ensure URL still has the id (in case it was an insert fallback)
+                try:
+                    st.query_params["s"] = saved_id
+                except Exception:
+                    pass
         except Exception as e:
             # explicitly silent — the user must not see DB errors
             print(f"[app] save_session error: {e}")
