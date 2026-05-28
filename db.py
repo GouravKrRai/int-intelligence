@@ -248,6 +248,14 @@ def save_session(
     return None
 
 
+#: Admin/owner emails that bypass the one-report-per-email limitation.
+#: These can request reports as many times as they want (useful for
+#: testing, debugging, and personal repeat use by the project owner).
+ADMIN_EMAILS = {
+    "gkrai890@gmail.com",
+}
+
+
 def request_report_email(session_id: str, email: str) -> tuple[bool, str]:
     """Called from the results screen when the user types an email to receive
     their report. Three outcomes:
@@ -256,7 +264,8 @@ def request_report_email(session_id: str, email: str) -> tuple[bool, str]:
        (False, error-msg)  — DB error / invalid input
 
     The actual email-sending is handled separately. This just records intent
-    so the same email can't be re-used.
+    so the same email can't be re-used. Admin emails in ADMIN_EMAILS bypass
+    the one-time limit entirely.
     """
     email_clean = (email or "").strip().lower()
     if "@" not in email_clean or "." not in email_clean.split("@")[-1]:
@@ -267,18 +276,19 @@ def request_report_email(session_id: str, email: str) -> tuple[bool, str]:
         return False, "Database not available right now. Try again in a minute."
 
     try:
-        # check if this email has already received a report
-        existing = (client.table("sessions")
-                    .select("id")
-                    .eq("email", email_clean)
-                    .not_.is_("report_sent_at", "null")
-                    .limit(1)
-                    .execute())
-        if existing.data:
-            return False, (
-                "This email has already received a report. Each email can only "
-                "be used once."
-            )
+        # admin emails skip the duplicate-check entirely
+        if email_clean not in ADMIN_EMAILS:
+            existing = (client.table("sessions")
+                        .select("id")
+                        .eq("email", email_clean)
+                        .not_.is_("report_sent_at", "null")
+                        .limit(1)
+                        .execute())
+            if existing.data:
+                return False, (
+                    "This email has already received a report. Each email can only "
+                    "be used once."
+                )
 
         # mark the session with the email and the send-request timestamp
         from datetime import datetime, timezone
@@ -309,9 +319,14 @@ def is_enabled() -> bool:
 def email_already_used(email: str) -> bool:
     """Return True if this email has already taken the test. Used to enforce
     one-session-per-email at the welcome screen. Empty/None emails always
-    return False (anonymous sessions don't deduplicate).
+    return False (anonymous sessions don't deduplicate). Admin emails in
+    ADMIN_EMAILS always return False so the owner can re-run freely.
     """
     if not email or not email.strip():
+        return False
+    email_clean = email.strip().lower()
+    # admin emails never count as "already used"
+    if email_clean in ADMIN_EMAILS:
         return False
     client = get_client()
     if client is None:
@@ -320,7 +335,7 @@ def email_already_used(email: str) -> bool:
     try:
         result = (client.table("sessions")
                   .select("id")
-                  .eq("email", email.strip().lower())
+                  .eq("email", email_clean)
                   .limit(1)
                   .execute())
         return bool(result.data)
