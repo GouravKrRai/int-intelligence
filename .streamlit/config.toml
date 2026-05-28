@@ -11,3 +11,9 @@ headless = true
 
 [browser]
 gatherUsageStats = false
+
+# disables developer keyboard shortcuts (C = clear caches, R = rerun, etc.)
+# that fire even when the user is just trying to copy text with Cmd+C
+[client]
+toolbarMode = "viewer"
+showErrorDetails = true

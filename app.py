@@ -89,6 +89,36 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+# JS to kill Streamlit's bare-C-key shortcut that pops "Clear caches" dialog.
+# Streamlit's keydown handler doesn't check modifiers properly, so Cmd+C
+# (which the OS handles for copy) ALSO triggers the dev menu. We intercept
+# in capture phase before Streamlit's handler sees it. The browser still
+# copies text because copy is handled at the selection layer, not the
+# keydown event.
+st.markdown("""
+<script>
+document.addEventListener('keydown', function(e) {
+  // bare C key — kill the Streamlit dev shortcut entirely
+  if ((e.key === 'c' || e.key === 'C') && !e.altKey && !e.shiftKey) {
+    if (e.metaKey || e.ctrlKey) {
+      // Cmd+C / Ctrl+C: let the OS-level copy fire, but stop Streamlit
+      e.stopPropagation();
+    } else {
+      // bare C: block both the dev menu AND prevent default
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  }
+  // also block bare R (rerun shortcut)
+  if ((e.key === 'r' || e.key === 'R') && !e.altKey && !e.shiftKey
+      && !e.metaKey && !e.ctrlKey) {
+    e.stopPropagation();
+    e.preventDefault();
+  }
+}, true);  // true = capture phase, before Streamlit's bubble-phase handler
+</script>
+""", unsafe_allow_html=True)
+
 st.markdown("""
 <style>
 /* page-wide */
