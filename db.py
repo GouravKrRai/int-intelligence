@@ -117,8 +117,11 @@ def save_session(
         for i, m in enumerate(matches[:10])
     ]
 
+    # normalize email to lowercase (so john@x.com and JOHN@X.COM count as same)
+    email_clean = email.strip().lower() if email and email.strip() else None
+
     row: dict[str, Any] = {
-        "email": email or None,
+        "email": email_clean,
         "q1_place": answers.get("Q1") or None,
         "q2_habit": answers.get("Q2") or None,
         "q3_explain": answers.get("Q3") or None,
@@ -145,3 +148,26 @@ def save_session(
 def is_enabled() -> bool:
     """Quick check used by the UI: do we have working persistence?"""
     return get_client() is not None
+
+
+def email_already_used(email: str) -> bool:
+    """Return True if this email has already taken the test. Used to enforce
+    one-session-per-email at the welcome screen. Empty/None emails always
+    return False (anonymous sessions don't deduplicate).
+    """
+    if not email or not email.strip():
+        return False
+    client = get_client()
+    if client is None:
+        # if DB is down, don't block users
+        return False
+    try:
+        result = (client.table("sessions")
+                  .select("id")
+                  .eq("email", email.strip().lower())
+                  .limit(1)
+                  .execute())
+        return bool(result.data)
+    except Exception as e:
+        print(f"[db] email_already_used check failed: {e}")
+        return False   # fail-open: don't block on DB error

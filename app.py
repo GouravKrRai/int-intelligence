@@ -335,7 +335,22 @@ def screen_welcome() -> None:
     )
 
     if st.button("Begin", key="begin_btn"):
-        st.session_state.email = email.strip()
+        email_clean = email.strip()
+        # enforce one-session-per-email
+        if email_clean and db.email_already_used(email_clean):
+            st.markdown(
+                "<div style='margin-top:1.5rem; padding:1rem 1.2rem; "
+                "background:#fbeaea; border-left:3px solid #c5443d; "
+                "color:#7a2a25; border-radius:4px; line-height:1.5;'>"
+                "<b>this email has already been used.</b><br>"
+                "each person can take INT Intelligence once. if you'd like "
+                "to take it again, you can leave the email blank or use a "
+                "different one."
+                "</div>",
+                unsafe_allow_html=True,
+            )
+            return
+        st.session_state.email = email_clean
         st.session_state.started_at = time.time()
         go("q0")
 
