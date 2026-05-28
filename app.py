@@ -300,99 +300,106 @@ def _clear_storage() -> None:
 # ---------------- career-map chart ----------------
 
 def render_career_map(all_matches: list[dict], top_matches: list[dict]) -> None:
-    """Scatter of all careers in cosine space. Top 20 highlighted with:
-      - one distinct color per career (tab20 colormap)
-      - TRIANGLE marker for top 5 (your strongest matches)
-      - CIRCLE marker for ranks 6-20
-      - no numbers/labels inside dots — legend on the right maps each
-        color+symbol to a career name
+    """Scatter of all careers in cosine space, zoomed into the upper-right
+    region where the top 20 actually live. Specs (approved by user):
+      - legend ABOVE the chart, 5 columns × 4 rows
+      - 20 distinct colors, one per career (tab20)
+      - all circles (no rank symbols)
+      - dot size = match %  (biggest dot = #1 match)
+      - cloud of every other career in light grey background
+      - real cosine positions for everything (top 20 + cloud share the space)
+      - zoom adapts to the top-20 bounding box so they spread naturally
+      - axis ticks scaled ×100, no decimals (so e.g. 0.65 reads as "65")
     """
     import matplotlib.pyplot as plt
+    import matplotlib.gridspec as gs
     from matplotlib import rcParams
     from matplotlib.lines import Line2D
+    from matplotlib.ticker import FuncFormatter
 
     rcParams["font.family"] = "Georgia, serif"
 
     xs_all = [m.get("gardner_cos", 0.0) for m in all_matches]
     ys_all = [m.get("content_cos", 0.0) for m in all_matches]
 
-    top_pts = [(i, m["title"],
+    top_pts = [(i, m["title"], m.get("match_pct", 0.0),
                 m.get("gardner_cos", 0.0),
                 m.get("content_cos", 0.0))
                for i, m in enumerate(top_matches, 1)]
 
-    fig, ax = plt.subplots(figsize=(12.5, 7.5), dpi=140)
-    fig.patch.set_facecolor("white")
-    ax.set_facecolor("white")
-
-    # background cloud — every other career, very subtle
-    ax.scatter(xs_all, ys_all, s=8, c="#e6e6e2", alpha=0.45,
-               edgecolors="none", zorder=1)
-
-    # set axis limits with padding
-    x_min, x_max = min(xs_all), max(xs_all)
-    y_min, y_max = min(ys_all), max(ys_all)
-    x_pad = (x_max - x_min) * 0.08
-    y_pad = (y_max - y_min) * 0.12
-    ax.set_xlim(x_min - x_pad, x_max + x_pad)
-    ax.set_ylim(y_min - y_pad, y_max + y_pad)
-
-    # 20 distinct colors from tab20 — designed for max distinguishability
+    # 20 distinct colors (tab20 — categorical, designed for distinguishability)
     cmap = plt.get_cmap("tab20")
     colors = [cmap(i / 20.0) for i in range(20)]
 
+    # dot size = match % — scale rank-spread so size difference is visible
+    pcts = [pct for _, _, pct, _, _ in top_pts]
+    p_min, p_max = min(pcts), max(pcts)
+    size_range = p_max - p_min if p_max > p_min else 1.0
+    sizes = [350 + 1450 * (pct - p_min) / size_range
+             for _, _, pct, _, _ in top_pts]
+
+    # Figure: legend on TOP, scatter on BOTTOM
+    fig = plt.figure(figsize=(14, 10), dpi=140)
+    fig.patch.set_facecolor("white")
+    grid = gs.GridSpec(2, 1, height_ratios=[0.45, 1.0], figure=fig, hspace=0.02)
+    ax_legend = fig.add_subplot(grid[0])
+    ax = fig.add_subplot(grid[1])
+
+    # ---- legend (above) ----
     legend_handles = []
-    # paint in reverse so rank 1 sits on top of any overlaps
-    for rank, title, x, y in reversed(top_pts):
-        color = colors[rank - 1]
-        if rank <= 5:
-            marker = "^"   # triangle for top 5 — your strongest matches
-            size = 280
-            edge_w = 2.2
-        else:
-            marker = "o"   # circle for ranks 6-20
-            size = 130
-            edge_w = 1.4
-        ax.scatter([x], [y], s=size, c=[color], marker=marker,
-                   edgecolors="white", linewidths=edge_w,
-                   zorder=3 + (21 - rank))
-
-    # build legend in rank order (#1 first)
-    for rank, title, _, _ in top_pts:
-        color = colors[rank - 1]
-        marker = "^" if rank <= 5 else "o"
-        # truncate long titles so legend doesn't blow out
-        label = title if len(title) <= 42 else title[:39] + "…"
-        label = f"{rank:>2}. {label}"
+    for (rank, title, pct, _, _), color in zip(top_pts, colors):
+        label = title if len(title) <= 38 else title[:35] + "…"
         legend_handles.append(
-            Line2D([0], [0], marker=marker, color="w",
+            Line2D([0], [0], marker="o", color="w",
                    markerfacecolor=color, markeredgecolor="white",
-                   markersize=11 if rank <= 5 else 8,
-                   markeredgewidth=1.2, label=label)
+                   markersize=11, markeredgewidth=1.0,
+                   label=f"{rank:>2}. {label}  ({pct:.1f}%)")
         )
+    ax_legend.legend(handles=legend_handles, loc="center", ncol=5,
+                     fontsize=8.5, frameon=False, handletextpad=0.5,
+                     columnspacing=1.4, labelspacing=0.8,
+                     title="top 20 careers   (dot size = match %)",
+                     title_fontsize=10)
+    ax_legend.axis("off")
 
-    # legend on the right side, anchored outside the axes
-    ax.legend(handles=legend_handles,
-              loc="upper left", bbox_to_anchor=(1.02, 1.0),
-              fontsize=8.5, frameon=False, labelspacing=0.7,
-              handletextpad=0.6, borderpad=0.4,
-              title="top 20 careers", title_fontsize=9)
+    # ---- chart (below) ----
+    # background cloud — every career
+    ax.scatter(xs_all, ys_all, s=10, c="#e6e6e2", alpha=0.55,
+               edgecolors="none", zorder=1)
 
-    # clean minimal axes
-    ax.set_xlabel("cognitive shape match  →", fontsize=10,
-                  color="#666", labelpad=10)
-    ax.set_ylabel("content / interest match  →", fontsize=10,
-                  color="#666", labelpad=10)
+    # top 20 — real cosine positions, all circles, sized by match%
+    for (rank, _, _, x, y), color, size in zip(top_pts, colors, sizes):
+        ax.scatter([x], [y], s=size, c=[color],
+                   edgecolors="white", linewidths=1.8,
+                   alpha=0.95, zorder=3 + (21 - rank))
+
+    # zoom into the upper-right region the top 20 actually occupy
+    top_xs = [x for _, _, _, x, _ in top_pts]
+    top_ys = [y for _, _, _, _, y in top_pts]
+    x_min, x_max = min(top_xs), max(top_xs)
+    y_min, y_max = min(top_ys), max(top_ys)
+    x_pad = max((x_max - x_min) * 0.18, 0.04)
+    y_pad = max((y_max - y_min) * 0.25, 0.04)
+    ax.set_xlim(x_min - x_pad, x_max + x_pad)
+    ax.set_ylim(y_min - y_pad, y_max + y_pad)
+
+    # ticks ×100, no decimals (so cosine 0.65 reads as "65")
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v * 100:.0f}"))
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v * 100:.0f}"))
+
+    ax.set_xlabel("cognitive shape match  →", fontsize=9,
+                  color="#777", labelpad=8)
+    ax.set_ylabel("content / interest match  →", fontsize=9,
+                  color="#777", labelpad=8)
     ax.tick_params(axis="both", colors="#aaa", labelsize=8)
+    ax.set_facecolor("#fafafa")
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
     for spine in ("left", "bottom"):
-        ax.spines[spine].set_color("#ddd")
-    ax.grid(True, which="major", linestyle="-", linewidth=0.5,
-            color="#f3f3f0", zorder=0)
+        ax.spines[spine].set_color("#e0e0e0")
+        ax.spines[spine].set_linewidth(0.8)
+    ax.grid(True, linestyle="-", linewidth=0.4, color="#eeeeee", zorder=0)
 
-    # reserve right ~36% of figure for the 20-row legend
-    fig.tight_layout(rect=[0, 0, 0.64, 1])
     st.pyplot(fig, use_container_width=True)
     plt.close(fig)
 
@@ -666,8 +673,8 @@ def screen_results() -> None:
                     "every career we know, plotted on two axes — how well it "
                     "fits the shape of your mind (horizontal), and how close "
                     "its day-to-day matches what you wrote about (vertical). "
-                    "your top 20 are labeled. upper-right = best fit. "
-                    "triangles are your top 5, circles are 6-20."
+                    "your top 20 are colored; each dot's size is its match %. "
+                    "upper-right = best fit."
                     "</p>", unsafe_allow_html=True)
         render_career_map(r["all_matches"], r["matches"])
 
