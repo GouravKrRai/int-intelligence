@@ -1,0 +1,6 @@
+streamlit>=1.32
+anthropic>=0.40
+numpy>=1.26
+matplotlib>=3.8
+sentence-transformers>=5.0
+torch>=2.2

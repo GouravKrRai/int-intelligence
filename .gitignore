@@ -1,0 +1,24 @@
+# python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+
+# secrets
+.streamlit/secrets.toml
+.env
+*.key
+
+# big raw data — rebuildable from the embedder + gardner_map scripts
+db_30_3_text/
+onet_30_3_text.zip
+
+# scratch / previews
+preview_chart.png
+*.tmp
+.DS_Store
+
+# HF model cache (system-wide, never bundle)
+.cache/
