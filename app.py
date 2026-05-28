@@ -238,7 +238,14 @@ def _hydrate_from_url() -> None:
     if not url_sid:
         return
 
-    saved = db.load_progress(url_sid)
+    load_fn = getattr(db, "load_progress", None)
+    if load_fn is None:
+        return  # stale db.py without progress functions — skip silently
+    try:
+        saved = load_fn(url_sid)
+    except Exception as e:
+        print(f"[app] load_progress error: {e}")
+        return
     if not saved:
         # row not found (maybe deleted) — clear stale URL param
         try:
@@ -272,10 +279,12 @@ def go(step: str) -> None:
     st.session_state.step = step
     sid = st.session_state.get("saved_id")
     if sid:
-        try:
-            db.update_progress(sid, step, st.session_state.get("answers") or {})
-        except Exception:
-            pass
+        update_fn = getattr(db, "update_progress", None)
+        if update_fn is not None:
+            try:
+                update_fn(sid, step, st.session_state.get("answers") or {})
+            except Exception:
+                pass
     st.rerun()
 
 
@@ -403,14 +412,21 @@ def screen_welcome() -> None:
         # Create the pending Supabase row right now and stash its id in the
         # URL. This lets refresh-during-test recover the session by reading
         # ?s=<id> back out of the URL on next page load.
+        # Defensive: if a stale deploy doesn't have the function yet, skip
+        # gracefully — the app still works, just without refresh-persistence.
         if not st.session_state.get("saved_id"):
-            sid = db.init_pending_session(user_agent=_get_user_agent())
-            if sid:
-                st.session_state.saved_id = sid
+            init_fn = getattr(db, "init_pending_session", None)
+            if init_fn is not None:
                 try:
-                    st.query_params["s"] = sid
-                except Exception:
-                    pass
+                    sid = init_fn(user_agent=_get_user_agent())
+                    if sid:
+                        st.session_state.saved_id = sid
+                        try:
+                            st.query_params["s"] = sid
+                        except Exception:
+                            pass
+                except Exception as e:
+                    print(f"[app] init_pending_session error: {e}")
         go("q0")
 
 
@@ -544,8 +560,9 @@ def screen_loading() -> None:
 
             # Pass existing_id so we UPDATE the pending row created on Begin
             # rather than inserting a duplicate. Falls back to insert if the
-            # pending row is somehow missing.
-            saved_id = db.save_session(
+            # pending row is somehow missing OR if db.save_session is a stale
+            # version that doesn't accept existing_id.
+            save_kwargs = dict(
                 answers=st.session_state.answers,
                 profile=profile,
                 scored=scored,
@@ -554,8 +571,15 @@ def screen_loading() -> None:
                 user_agent=_get_user_agent(),
                 duration_seconds=duration,
                 metadata=metadata,
-                existing_id=st.session_state.get("saved_id"),
             )
+            try:
+                saved_id = db.save_session(
+                    **save_kwargs,
+                    existing_id=st.session_state.get("saved_id"),
+                )
+            except TypeError:
+                # stale db.py — fall back to old signature
+                saved_id = db.save_session(**save_kwargs)
             if saved_id:
                 st.session_state.saved_id = saved_id
                 # ensure URL still has the id (in case it was an insert fallback)
