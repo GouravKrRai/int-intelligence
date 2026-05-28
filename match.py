@@ -52,6 +52,30 @@ PROFILE_MEAN = 100.0 / len(INTEL)
 # tuned across potter/geology/env-law test profiles with rank normalization.
 DEFAULT_ALPHA = 0.3
 
+# ---------- domain-confusable careers (Fix B) ----------
+# These O*NET careers have descriptions whose vocabulary heavily overlaps with
+# unrelated callings (e.g. "Gambling Managers" reads like any administrator who
+# handles crowds + rules + compliance, so it kept surfacing as #1 for a latent
+# IAS/civic-administration profile). To prevent them from monopolizing top
+# results when they're a semantic-only match, we apply a score penalty unless
+# the user's content_cos is exceptionally high (meaning their essays genuinely
+# use casino/gambling vocabulary).
+CONFUSABLE_PENALTY = 0.72             # downweight to 72% of original score
+CONFUSABLE_BYPASS_THRESHOLD = 0.42    # if content_cos >= this, no penalty (true match)
+CONFUSABLE_SOCS = {
+    "11-9071.00",  # Gambling Managers
+    "11-9071.01",  # Gambling Managers (variant)
+    "33-9031.00",  # Gambling Surveillance Officers and Investigators
+    "39-1013.00",  # First-Line Supervisors of Gambling Services Workers
+    "39-3010.00",  # Gambling Services Workers (group)
+    "39-3011.00",  # Gambling Dealers
+    "39-3012.00",  # Gambling and Sports Book Writers and Runners
+    "39-3019.00",  # Gambling Service Workers, All Other
+    "43-3041.00",  # Gambling Cage Workers
+    "41-9041.00",  # Telemarketers (confusable with any persuasive calling)
+    "39-3031.00",  # Ushers, Lobby Attendants, Ticket Takers (crowd-control overlap)
+}
+
 
 def load_population() -> tuple[list[dict], dict[str, float]]:
     """Returns (rows, baseline) — list of jobs and the population mean per intel."""
@@ -216,6 +240,21 @@ def match(user_profile: dict, top_n: int = 10,
             entry["content_cos"] = round(c_raw, 4)
             entry["content_rank"] = round(c_n, 3)
         scored.append(entry)
+
+    # Fix B: penalize domain-confusable careers unless content_cos is high
+    # enough to indicate a genuine vocabulary match (e.g. a user whose essays
+    # really are about casinos will bypass the penalty).
+    for entry in scored:
+        if entry["soc"] in CONFUSABLE_SOCS:
+            c_cos = entry.get("content_cos") or 0.0
+            if c_cos < CONFUSABLE_BYPASS_THRESHOLD:
+                entry["cos"] = round(entry["cos"] * CONFUSABLE_PENALTY, 4)
+                if normalize == "rank":
+                    entry["match_pct"] = round(100 * entry["cos"], 1)
+                else:
+                    entry["match_pct"] = round(50 * (entry["cos"] + 1), 1)
+                entry["_confusable_penalty"] = True
+
     scored.sort(key=lambda x: x["cos"], reverse=True)
     return scored[:top_n]
 
