@@ -201,8 +201,74 @@ body, .stMarkdown, .stTextArea textarea {font-family: 'Georgia', serif;}
 """, unsafe_allow_html=True)
 
 
-# ---------------- session state ----------------
+# ---------------- session state + browser persistence ----------------
 
+# Browser localStorage bridge so refresh doesn't blow away progress.
+# Falls back to in-memory-only if the package isn't available.
+try:
+    from streamlit_local_storage import LocalStorage
+    _LS = LocalStorage()
+    _LS_OK = True
+except Exception:
+    _LS = None
+    _LS_OK = False
+
+_LS_KEY = "int_intelligence_state_v1"
+
+# Fields we persist across refresh. NOT result/all_matches — those are big
+# and can be re-rendered from saved_id if needed.
+_PERSIST_FIELDS = ("step", "answers", "saved_id", "started_at",
+                   "q_timings", "q_visits", "email_sent")
+
+
+def _hydrate_from_storage() -> None:
+    """Restore state from browser localStorage on first render of a session.
+    Only runs once per browser session. Safe to call repeatedly."""
+    if st.session_state.get("_hydrated"):
+        return
+    st.session_state._hydrated = True   # mark even if hydration fails
+
+    if not _LS_OK:
+        return
+    try:
+        import json
+        raw = _LS.getItem(_LS_KEY)
+        if not raw:
+            return
+        data = json.loads(raw) if isinstance(raw, str) else raw
+        if not isinstance(data, dict):
+            return
+        for k in _PERSIST_FIELDS:
+            if k in data and data[k] is not None:
+                st.session_state[k] = data[k]
+    except Exception:
+        pass
+
+
+def _save_to_storage() -> None:
+    """Snapshot the lightweight state fields to localStorage. Called after
+    every state mutation (step transition or answer save)."""
+    if not _LS_OK:
+        return
+    try:
+        import json
+        snapshot = {k: st.session_state.get(k) for k in _PERSIST_FIELDS}
+        _LS.setItem(_LS_KEY, json.dumps(snapshot))
+    except Exception:
+        pass
+
+
+def _clear_storage() -> None:
+    """Wipe the localStorage entry — called on Start Over."""
+    if not _LS_OK:
+        return
+    try:
+        _LS.deleteItem(_LS_KEY)
+    except Exception:
+        pass
+
+
+# Default session_state values (used only if localStorage has no saved entry)
 if "step" not in st.session_state:
     st.session_state.step = "welcome"   # welcome | q0..q6 | loading | results
     st.session_state.answers = {}        # {qid: text}
@@ -214,9 +280,14 @@ if "step" not in st.session_state:
     st.session_state.email_sent = False  # has the user requested email send?
     st.session_state.email_error = None  # last email submission error
 
+# Try to hydrate from browser localStorage. If found, this overrides the
+# defaults above. Must run after the defaults are set so missing keys exist.
+_hydrate_from_storage()
+
 
 def go(step: str) -> None:
     st.session_state.step = step
+    _save_to_storage()
     st.rerun()
 
 
@@ -628,6 +699,7 @@ def screen_results() -> None:
         st.session_state.email_error = None
         st.session_state.q_timings = {}
         st.session_state.q_visits = {}
+        _clear_storage()
         st.rerun()
 
 
@@ -648,6 +720,15 @@ elif step.startswith("q"):
 elif step == "loading":
     screen_loading()
 elif step == "results":
-    screen_results()
+    # if user refreshed on results, result/all_matches are gone from memory
+    # because we don't persist big payloads. re-run the pipeline silently
+    # by routing back to loading, which uses the saved answers.
+    if not st.session_state.get("result"):
+        if st.session_state.get("answers"):
+            go("loading")
+        else:
+            go("welcome")
+    else:
+        screen_results()
 else:
     go("welcome")

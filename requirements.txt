@@ -6,3 +6,4 @@ sentence-transformers>=5.0
 torch>=2.2
 supabase>=2.30
 python-dotenv>=1.0
+streamlit-local-storage>=0.0.21
