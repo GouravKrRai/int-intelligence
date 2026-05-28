@@ -63,6 +63,7 @@ DEFAULT_ALPHA = 0.3
 CONFUSABLE_PENALTY = 0.72             # downweight to 72% of original score
 CONFUSABLE_BYPASS_THRESHOLD = 0.42    # if content_cos >= this, no penalty (true match)
 CONFUSABLE_SOCS = {
+    # gambling industry — semantic overlap with civic-administration calling
     "11-9071.00",  # Gambling Managers
     "11-9071.01",  # Gambling Managers (variant)
     "33-9031.00",  # Gambling Surveillance Officers and Investigators
@@ -72,8 +73,15 @@ CONFUSABLE_SOCS = {
     "39-3012.00",  # Gambling and Sports Book Writers and Runners
     "39-3019.00",  # Gambling Service Workers, All Other
     "43-3041.00",  # Gambling Cage Workers
-    "41-9041.00",  # Telemarketers (confusable with any persuasive calling)
-    "39-3031.00",  # Ushers, Lobby Attendants, Ticket Takers (crowd-control overlap)
+    # general overlap with persuasive / crowd-management callings
+    "41-9041.00",  # Telemarketers
+    "39-3031.00",  # Ushers, Lobby Attendants, Ticket Takers
+    # medical imaging — semantic overlap with audio-engineering / voice-acting
+    # (MRI/sono descriptions use acoustic + frequency + vibration + waves
+    # vocabulary that misleads the content embedding for sound-focused users)
+    "29-2035.00",  # Magnetic Resonance Imaging Technologists
+    "29-2032.00",  # Diagnostic Medical Sonographers
+    "29-2034.00",  # Radiologic Technologists and Technicians
 }
 
 
