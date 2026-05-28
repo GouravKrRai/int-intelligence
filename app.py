@@ -200,51 +200,95 @@ def go(step: str) -> None:
 # ---------------- career-map chart ----------------
 
 def render_career_map(all_matches: list[dict], top_matches: list[dict]) -> None:
-    """Horizontal bar chart of the top 10 careers, ranked by match %.
-    #1 highlighted in red. Clean, scannable, anyone gets it instantly.
+    """Scatter of all careers + labeled callouts in a clean vertical column on
+    the right. Each label connects to its dot with a thin gray leader line.
+    No overlapping labels, all 10 readable.
     """
     import matplotlib.pyplot as plt
     from matplotlib import rcParams
 
-    # use the top 10 only; reverse so #1 lands at the top of the chart
-    titles = [m["title"] for m in top_matches][::-1]
-    matches = [m["match_pct"] for m in top_matches][::-1]
-    y_pos = list(range(len(titles)))
-
     rcParams["font.family"] = "Georgia, serif"
-    fig, ax = plt.subplots(figsize=(8, 6), dpi=140)
+
+    xs_all = [m.get("gardner_cos", 0.0) for m in all_matches]
+    ys_all = [m.get("content_cos", 0.0) for m in all_matches]
+
+    top_pts = [(i, m["title"],
+                m.get("gardner_cos", 0.0),
+                m.get("content_cos", 0.0))
+               for i, m in enumerate(top_matches, 1)]
+
+    fig, ax = plt.subplots(figsize=(9.5, 6.8), dpi=140)
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
 
-    # all bars dark, except the #1 (last in reversed list) in accent red
-    colors = ["#222"] * len(titles)
-    colors[-1] = "#c5443d"   # highlight the top match
+    # background cloud
+    ax.scatter(xs_all, ys_all, s=10, c="#dadad6", alpha=0.5,
+               edgecolors="none", zorder=1)
 
-    ax.barh(y_pos, matches, color=colors, height=0.6,
-            edgecolor="white", linewidth=0)
+    x_min, x_max = min(xs_all), max(xs_all)
+    y_min, y_max = min(ys_all), max(ys_all)
+    x_pad = (x_max - x_min) * 0.05
+    y_pad = (y_max - y_min) * 0.10
 
-    # axis labels = career names
-    ax.set_yticks(y_pos)
-    ax.set_yticklabels(titles, fontsize=10, color="#222")
+    # extend the right side substantially to hold the callout column
+    callout_x_start = x_max + (x_max - x_min) * 0.15   # where labels start
+    plot_x_max = x_max + (x_max - x_min) * 1.05        # right edge of plot
+    ax.set_xlim(x_min - x_pad, plot_x_max)
+    ax.set_ylim(y_min - y_pad, y_max + y_pad)
 
-    # x axis from 5 below smallest match to 100 — clean window
-    x_min = max(50.0, min(matches) - 5.0)
-    ax.set_xlim(x_min, 100.0)
-    ax.set_xlabel("match  %", fontsize=10, color="#444", labelpad=8)
+    # top 10 dots — small, in their actual positions
+    xs_top = [p[2] for p in top_pts]
+    ys_top = [p[3] for p in top_pts]
+    colors = ["#c5443d" if r == 1 else ("#444" if r <= 3 else "#222")
+              for (r, _, _, _) in top_pts]
+    ax.scatter(xs_top, ys_top, s=110, c=colors, edgecolors="white",
+               linewidths=1.5, zorder=3)
+    for (rank, _, x, y) in top_pts:
+        ax.annotate(str(rank), (x, y), ha="center", va="center",
+                    fontsize=8, color="white", weight="bold", zorder=4)
 
-    # value labels at the end of each bar
-    for y, v in zip(y_pos, matches):
-        ax.text(v + (100 - x_min) * 0.01, y, f"{v:.1f}%",
-                va="center", fontsize=9, color="#444")
+    # arrange callout labels in RANK order (1 at top, 10 at bottom) so users
+    # read them naturally top-to-bottom matching the numbered list below.
+    # leader lines will sometimes cross but that's a fair trade for readability.
+    ordered = sorted(top_pts, key=lambda p: p[0])   # by rank
+    n = len(ordered)
+    y_top = y_max + y_pad * 0.5
+    y_bot = y_min - y_pad * 0.0
+    callout_ys = [y_top - i * (y_top - y_bot) / max(n - 1, 1) for i in range(n)]
 
-    # clean spines + grid
-    for spine in ("top", "right", "left"):
+    def short(t):
+        return t if len(t) <= 50 else t[:48] + "…"
+
+    for (rank, title, x, y), cy in zip(ordered, callout_ys):
+        # leader line from dot to callout
+        ax.plot([x, callout_x_start - (x_max - x_min) * 0.01],
+                [y, cy], color="#cfcfcc", linewidth=0.8,
+                solid_capstyle="round", zorder=2)
+        # small dot at the callout end so it feels anchored
+        ax.scatter([callout_x_start - (x_max - x_min) * 0.01], [cy],
+                   s=12, c="#cfcfcc", edgecolors="none", zorder=2)
+        # the label itself — rank number + career name
+        ax.text(callout_x_start, cy,
+                f"  {rank:>2}.  {short(title)}",
+                va="center", ha="left",
+                fontsize=10,
+                color="#c5443d" if rank == 1 else "#222",
+                weight="bold" if rank == 1 else "normal",
+                zorder=5,
+                family="Georgia")
+
+    # axis cosmetics
+    ax.set_xlabel("cognitive shape match  →", fontsize=10,
+                  color="#444", labelpad=8)
+    ax.set_ylabel("content / interest match  →", fontsize=10,
+                  color="#444", labelpad=8)
+    ax.tick_params(axis="both", colors="#888", labelsize=8)
+    for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
-    ax.spines["bottom"].set_color("#bbb")
-    ax.tick_params(axis="x", colors="#888", labelsize=8)
-    ax.tick_params(axis="y", length=0)
-    ax.grid(axis="x", linestyle="-", linewidth=0.5, color="#eee", zorder=0)
-    ax.set_axisbelow(True)
+    for spine in ("left", "bottom"):
+        ax.spines[spine].set_color("#bbb")
+    ax.grid(True, which="major", linestyle="-", linewidth=0.5,
+            color="#eee", zorder=0)
 
     fig.tight_layout()
     st.pyplot(fig, use_container_width=True)
@@ -413,15 +457,17 @@ def screen_results() -> None:
                 unsafe_allow_html=True,
             )
 
-    # ---- top 10 careers as a horizontal bar chart ----
+    # ---- career map (2D scatter with labeled top-10) ----
     if r.get("all_matches"):
         st.markdown("<hr style='margin:3rem 0; border:none; border-top:1px solid #ddd;'>",
                     unsafe_allow_html=True)
-        st.markdown(f"<h2 style='margin-bottom:0.2rem;'>your top 10 match</h2>",
+        st.markdown(f"<h2 style='margin-bottom:0.2rem;'>your career map</h2>",
                     unsafe_allow_html=True)
         st.markdown("<p style='color:#666; margin-bottom:1.5rem;'>"
-                    "the careers closest to the shape of your mind, ranked by "
-                    "how well they fit. your #1 is highlighted."
+                    "every career we know, plotted on two axes — how well it "
+                    "fits the shape of your mind (horizontal), and how close "
+                    "its day-to-day matches what you wrote about (vertical). "
+                    "your top 10 are labeled. upper-right = best fit."
                     "</p>", unsafe_allow_html=True)
         render_career_map(r["all_matches"], r["matches"])
 
