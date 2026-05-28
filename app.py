@@ -300,12 +300,16 @@ def _clear_storage() -> None:
 # ---------------- career-map chart ----------------
 
 def render_career_map(all_matches: list[dict], top_matches: list[dict]) -> None:
-    """Scatter of all careers in cosine space. Top 10 highlighted with a warm
-    heat gradient (deep red = #1, fading to gold = #10). No leader lines, no
-    side labels — the career list below the chart serves as the legend.
+    """Scatter of all careers in cosine space. Top 20 highlighted with:
+      - one distinct color per career (tab20 colormap)
+      - TRIANGLE marker for top 5 (your strongest matches)
+      - CIRCLE marker for ranks 6-20
+      - no numbers/labels inside dots — legend on the right maps each
+        color+symbol to a career name
     """
     import matplotlib.pyplot as plt
     from matplotlib import rcParams
+    from matplotlib.lines import Line2D
 
     rcParams["font.family"] = "Georgia, serif"
 
@@ -317,14 +321,15 @@ def render_career_map(all_matches: list[dict], top_matches: list[dict]) -> None:
                 m.get("content_cos", 0.0))
                for i, m in enumerate(top_matches, 1)]
 
-    fig, ax = plt.subplots(figsize=(9.5, 6.0), dpi=140)
+    fig, ax = plt.subplots(figsize=(12.5, 7.5), dpi=140)
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
 
-    # soft background cloud — every other career
-    ax.scatter(xs_all, ys_all, s=10, c="#e6e6e2", alpha=0.55,
+    # background cloud — every other career, very subtle
+    ax.scatter(xs_all, ys_all, s=8, c="#e6e6e2", alpha=0.45,
                edgecolors="none", zorder=1)
 
+    # set axis limits with padding
     x_min, x_max = min(xs_all), max(xs_all)
     y_min, y_max = min(ys_all), max(ys_all)
     x_pad = (x_max - x_min) * 0.08
@@ -332,35 +337,46 @@ def render_career_map(all_matches: list[dict], top_matches: list[dict]) -> None:
     ax.set_xlim(x_min - x_pad, x_max + x_pad)
     ax.set_ylim(y_min - y_pad, y_max + y_pad)
 
-    # warm heat gradient: deep red (#1) → orange → gold (#10)
-    heat_colors = [
-        "#b8312b",  # 1 — deep red
-        "#cb4a30",  # 2
-        "#dc6034",  # 3
-        "#e9763a",  # 4
-        "#f08c42",  # 5
-        "#f3a049",  # 6
-        "#f3b455",  # 7
-        "#efc665",  # 8
-        "#e8d27c",  # 9
-        "#dfd793",  # 10 — soft gold
-    ]
+    # 20 distinct colors from tab20 — designed for max distinguishability
+    cmap = plt.get_cmap("tab20")
+    colors = [cmap(i / 20.0) for i in range(20)]
 
-    # dot sizes shrink slightly with rank for visual hierarchy
-    sizes = [340, 290, 260, 235, 215, 200, 185, 175, 165, 155]
+    legend_handles = []
+    # paint in reverse so rank 1 sits on top of any overlaps
+    for rank, title, x, y in reversed(top_pts):
+        color = colors[rank - 1]
+        if rank <= 5:
+            marker = "^"   # triangle for top 5 — your strongest matches
+            size = 280
+            edge_w = 2.2
+        else:
+            marker = "o"   # circle for ranks 6-20
+            size = 130
+            edge_w = 1.4
+        ax.scatter([x], [y], s=size, c=[color], marker=marker,
+                   edgecolors="white", linewidths=edge_w,
+                   zorder=3 + (21 - rank))
 
-    # soft halo behind #1 so it pops even when buried in the cluster
-    _, _, x1, y1 = top_pts[0]
-    ax.scatter([x1], [y1], s=900, c="#b8312b", alpha=0.12,
-               edgecolors="none", zorder=2)
+    # build legend in rank order (#1 first)
+    for rank, title, _, _ in top_pts:
+        color = colors[rank - 1]
+        marker = "^" if rank <= 5 else "o"
+        # truncate long titles so legend doesn't blow out
+        label = title if len(title) <= 42 else title[:39] + "…"
+        label = f"{rank:>2}. {label}"
+        legend_handles.append(
+            Line2D([0], [0], marker=marker, color="w",
+                   markerfacecolor=color, markeredgecolor="white",
+                   markersize=11 if rank <= 5 else 8,
+                   markeredgewidth=1.2, label=label)
+        )
 
-    # paint from rank 10 down to 1 so #1 sits on top of any overlaps
-    for (rank, _, x, y), color, size in reversed(list(zip(top_pts, heat_colors, sizes))):
-        ax.scatter([x], [y], s=size, c=color, edgecolors="white",
-                   linewidths=2.0, zorder=3 + (10 - rank))
-        ax.annotate(str(rank), (x, y), ha="center", va="center",
-                    fontsize=11, color="white", weight="bold",
-                    zorder=20 + (10 - rank))
+    # legend on the right side, anchored outside the axes
+    ax.legend(handles=legend_handles,
+              loc="upper left", bbox_to_anchor=(1.02, 1.0),
+              fontsize=8.5, frameon=False, labelspacing=0.7,
+              handletextpad=0.6, borderpad=0.4,
+              title="top 20 careers", title_fontsize=9)
 
     # clean minimal axes
     ax.set_xlabel("cognitive shape match  →", fontsize=10,
@@ -375,14 +391,8 @@ def render_career_map(all_matches: list[dict], top_matches: list[dict]) -> None:
     ax.grid(True, which="major", linestyle="-", linewidth=0.5,
             color="#f3f3f0", zorder=0)
 
-    # subtle "best match" pointer in upper-right corner
-    ax.annotate("best match",
-                xy=(0.99, 0.97), xycoords="axes fraction",
-                ha="right", va="top",
-                fontsize=8, color="#b8312b", style="italic",
-                weight="bold")
-
-    fig.tight_layout()
+    # reserve right ~36% of figure for the 20-row legend
+    fig.tight_layout(rect=[0, 0, 0.64, 1])
     st.pyplot(fig, use_container_width=True)
     plt.close(fig)
 
@@ -516,7 +526,7 @@ def screen_loading() -> None:
         st.session_state.result = {
             "scored": scored,
             "profile": profile,
-            "matches": all_matches[:10],
+            "matches": all_matches[:20],
             "all_matches": all_matches,            # used by the career-map chart
             "used_content": used_content,
         }
@@ -566,7 +576,7 @@ def screen_loading() -> None:
                 answers=st.session_state.answers,
                 profile=profile,
                 scored=scored,
-                matches=all_matches[:10],
+                matches=all_matches[:20],
                 email=None,             # captured later on results screen
                 user_agent=_get_user_agent(),
                 duration_seconds=duration,
@@ -656,7 +666,8 @@ def screen_results() -> None:
                     "every career we know, plotted on two axes — how well it "
                     "fits the shape of your mind (horizontal), and how close "
                     "its day-to-day matches what you wrote about (vertical). "
-                    "your top 10 are labeled. upper-right = best fit."
+                    "your top 20 are labeled. upper-right = best fit. "
+                    "triangles are your top 5, circles are 6-20."
                     "</p>", unsafe_allow_html=True)
         render_career_map(r["all_matches"], r["matches"])
 
