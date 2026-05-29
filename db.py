@@ -344,10 +344,14 @@ def request_report_email(session_id: str, email: str) -> tuple[bool, str]:
     try:
         # admin emails skip the duplicate-check entirely
         if email_clean not in ADMIN_EMAILS:
+            # Check report_sent_to (authoritative column for who got a report).
+            # We previously checked `email`, but rows from earlier code paths
+            # only set report_sent_to and left email NULL, allowing duplicates
+            # to slip through. report_sent_to is set on every successful send,
+            # so it's the right column to dedupe on.
             existing = (client.table("sessions")
                         .select("id")
-                        .eq("email", email_clean)
-                        .not_.is_("report_sent_at", "null")
+                        .eq("report_sent_to", email_clean)
                         .limit(1)
                         .execute())
             if existing.data:
@@ -448,12 +452,23 @@ def email_already_used(email: str) -> bool:
         # if DB is down, don't block users
         return False
     try:
-        result = (client.table("sessions")
-                  .select("id")
-                  .eq("email", email_clean)
-                  .limit(1)
-                  .execute())
-        return bool(result.data)
+        # Check BOTH `email` (set when user enters their email on results
+        # screen, also persisted to email column) AND `report_sent_to`
+        # (authoritative column for "got a report sent"). Either match
+        # means this email has been used.
+        result_email = (client.table("sessions")
+                        .select("id")
+                        .eq("email", email_clean)
+                        .limit(1)
+                        .execute())
+        if result_email.data:
+            return True
+        result_sent = (client.table("sessions")
+                       .select("id")
+                       .eq("report_sent_to", email_clean)
+                       .limit(1)
+                       .execute())
+        return bool(result_sent.data)
     except Exception as e:
         print(f"[db] email_already_used check failed: {e}")
         return False   # fail-open: don't block on DB error
