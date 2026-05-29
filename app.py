@@ -344,6 +344,11 @@ _hydrate_from_url()
 def go(step: str) -> None:
     """Transition to a new step. Persists step + answers to Supabase if we
     have a pending session id, so a page refresh can rehydrate from the DB."""
+    # Reset the loading-screen paint flag every time we enter loading,
+    # so the two-pass render gets a fresh start (otherwise a second
+    # invocation in the same session would skip the paint-only pass).
+    if step == "loading":
+        st.session_state.pop("_loading_paint_done", None)
     st.session_state.step = step
     sid = st.session_state.get("saved_id")
     if sid:
@@ -551,6 +556,14 @@ def screen_question(idx: int) -> None:
 
 def screen_loading() -> None:
     first_run = "_embedder_warm" not in st.session_state
+
+    # Two-pass render so the previous question's DOM is fully cleared before
+    # the blocking LLM call begins. Without this, the textarea + prompt from
+    # Q7 stays visible UNDERNEATH the "Reading you..." message until the
+    # ~10-second llm_score() call returns and a final rerun fires.
+    #   Pass 1: just emit the loading UI and st.rerun() — this commits a frame
+    #           where the previous elements get cleared.
+    #   Pass 2: emit the loading UI again AND do the actual work.
     st.markdown(
         "<div style='text-align:center; padding:6rem 0; color:#555;'>"
         "<h2 style='color:#222;'>Reading you...</h2>"
@@ -562,6 +575,13 @@ def screen_loading() -> None:
         + "</p></div>",
         unsafe_allow_html=True,
     )
+
+    if not st.session_state.get("_loading_paint_done"):
+        # First pass: only paint the loading UI, then rerun so the DOM
+        # commits with the previous question's widgets removed.
+        st.session_state._loading_paint_done = True
+        st.rerun()
+
     st.session_state._embedder_warm = True
 
     if not setup_api_key():
@@ -827,6 +847,9 @@ def screen_results() -> None:
         st.session_state.email_error = None
         st.session_state.q_timings = {}
         st.session_state.q_visits = {}
+        # clear the loading-screen paint-once flag so a second run also
+        # gets the clean two-pass render
+        st.session_state.pop("_loading_paint_done", None)
         _clear_storage()
         st.rerun()
 
