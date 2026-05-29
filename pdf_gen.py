@@ -195,31 +195,19 @@ def _render_chart_image(all_matches: list[dict],
     pcts = [pct for _, _, pct, _, _ in top_pts]
     p_min, p_max = min(pcts), max(pcts)
     p_range = p_max - p_min if p_max > p_min else 1.0
-    sizes = [200 + 800 * (pct - p_min) / p_range
+    sizes = [180 + 700 * (pct - p_min) / p_range
              for _, _, pct, _, _ in top_pts]
 
-    fig = plt.figure(figsize=(11, 8), dpi=130)
+    # Portrait orientation: chart on TOP, legend BELOW in 2 columns.
+    # Matches the deployed app's current chart design (single-source so
+    # the PDF version doesn't drift from what users saw on screen).
+    fig = plt.figure(figsize=(8.5, 10.5), dpi=130)
     fig.patch.set_facecolor("white")
-    grid = gs.GridSpec(2, 1, height_ratios=[0.45, 1.0], figure=fig, hspace=0.02)
-    ax_legend = fig.add_subplot(grid[0])
-    ax = fig.add_subplot(grid[1])
+    grid = gs.GridSpec(2, 1, height_ratios=[1.0, 0.55], figure=fig, hspace=0.18)
+    ax = fig.add_subplot(grid[0])
+    ax_legend = fig.add_subplot(grid[1])
 
-    handles = []
-    for (rank, title, pct, _, _), color in zip(top_pts, colors):
-        label = title if len(title) <= 36 else title[:33] + "…"
-        handles.append(
-            Line2D([0], [0], marker="o", color="w",
-                   markerfacecolor=color, markeredgecolor="white",
-                   markersize=9, markeredgewidth=1.0,
-                   label=f"{rank:>2}. {label}  ({pct:.1f}%)")
-        )
-    ax_legend.legend(handles=handles, loc="center", ncol=5,
-                     fontsize=7, frameon=False, handletextpad=0.4,
-                     columnspacing=1.2, labelspacing=0.7,
-                     title="top 20 careers   (dot size = match %)",
-                     title_fontsize=8.5)
-    ax_legend.axis("off")
-
+    # ---- chart (top) ----
     ax.scatter(xs_all, ys_all, s=8, c="#e6e6e2",
                alpha=0.55, edgecolors="none", zorder=1)
     for (rank, _, _, x, y), color, size in zip(top_pts, colors, sizes):
@@ -237,11 +225,11 @@ def _render_chart_image(all_matches: list[dict],
     ax.set_ylim(y_min - y_pad, y_max + y_pad)
     ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v * 100:.0f}"))
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v * 100:.0f}"))
-    ax.set_xlabel("cognitive shape match  →", fontsize=8.5,
-                  color="#777", labelpad=6)
-    ax.set_ylabel("content / interest match  →", fontsize=8.5,
-                  color="#777", labelpad=6)
-    ax.tick_params(axis="both", colors="#aaa", labelsize=7)
+    ax.set_xlabel("cognitive shape match  →", fontsize=9,
+                  color="#777", labelpad=7)
+    ax.set_ylabel("content / interest match  →", fontsize=9,
+                  color="#777", labelpad=7)
+    ax.tick_params(axis="both", colors="#aaa", labelsize=8)
     ax.set_facecolor("#fafafa")
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
@@ -249,6 +237,23 @@ def _render_chart_image(all_matches: list[dict],
         ax.spines[spine].set_color("#e0e0e0")
         ax.spines[spine].set_linewidth(0.8)
     ax.grid(True, linestyle="-", linewidth=0.4, color="#eeeeee", zorder=0)
+
+    # ---- legend (bottom, 2 columns) ----
+    handles = []
+    for (rank, title, pct, _, _), color in zip(top_pts, colors):
+        label = title if len(title) <= 46 else title[:43] + "…"
+        handles.append(
+            Line2D([0], [0], marker="o", color="w",
+                   markerfacecolor=color, markeredgecolor="white",
+                   markersize=9, markeredgewidth=1.0,
+                   label=f"{rank:>2}. {label}  ({pct:.1f}%)")
+        )
+    ax_legend.legend(handles=handles, loc="center", ncol=2,
+                     fontsize=8, frameon=False, handletextpad=0.5,
+                     columnspacing=1.6, labelspacing=0.8,
+                     title="top 20 careers   (dot size = match %)",
+                     title_fontsize=9)
+    ax_legend.axis("off")
 
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=130, bbox_inches="tight",
@@ -341,8 +346,11 @@ def build_pdf(profile: dict[str, float],
                 "Your top 20 are colored; dot size is the match %.",
                 styles["body"]))
             story.append(Spacer(1, 3 * mm))
+            # chart aspect ratio is 8.5:10.5 (portrait). A4 usable width is
+            # ~170mm; we use 145mm and let the height scale to ~179mm so
+            # the chart + caption fit comfortably on a single page.
             img = Image(io.BytesIO(chart_bytes),
-                        width=170 * mm, height=125 * mm)
+                        width=145 * mm, height=179 * mm)
             story.append(img)
 
     def _footer(canvas, _doc):

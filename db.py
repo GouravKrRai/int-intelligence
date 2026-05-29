@@ -359,11 +359,14 @@ def request_report_email(session_id: str, email: str) -> tuple[bool, str]:
         # evidence_json is {intel: "string"} — reshape to scorer format
         scored = {k: {"score": 0, "evidence": v} for k, v in evidence.items()}
 
-        # Build the PDF
+        # Build the PDF — pass top_matches as all_matches so the career-map
+        # chart renders (with top 20 as both labelled dots and as the cloud).
+        # We don't persist the full 2000-row ranking in Supabase (too big),
+        # but the chart still works fine with just the top 20.
         try:
             from pdf_gen import build_pdf
             pdf_bytes = build_pdf(profile, scored, top_matches,
-                                  all_matches=None,
+                                  all_matches=top_matches,
                                   user_email=email_clean)
         except Exception as e:
             print(f"[db] PDF build failed: {e}")
