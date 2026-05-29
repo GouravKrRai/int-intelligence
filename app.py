@@ -114,6 +114,20 @@ st.set_page_config(
 # keydown event.
 st.markdown("""
 <script>
+// Ensure a mobile-friendly viewport tag is in <head>. Streamlit usually
+// sets this, but we guarantee it so the layout doesn't fall back to
+// desktop-width emulation on phones.
+(function () {
+  if (window.parent && window.parent.document) {
+    var doc = window.parent.document;
+    if (!doc.querySelector('meta[name="viewport"]')) {
+      var m = doc.createElement('meta');
+      m.name = 'viewport';
+      m.content = 'width=device-width, initial-scale=1, viewport-fit=cover';
+      doc.head.appendChild(m);
+    }
+  }
+})();
 document.addEventListener('keydown', function(e) {
   // bare C key — kill the Streamlit dev shortcut entirely
   if ((e.key === 'c' || e.key === 'C') && !e.altKey && !e.shiftKey) {
@@ -197,6 +211,60 @@ body, .stMarkdown, .stTextArea textarea {font-family: 'Georgia', serif;}
                 margin-bottom: 0.7rem; border-left: 3px solid #222;}
 .evidence-intel {font-weight: 500; color: #222; margin-bottom: 0.3rem;}
 .evidence-text {font-size: 0.95rem; color: #555; line-height: 1.5;}
+
+/* ---------- mobile (≤640px wide) ---------- */
+@media (max-width: 640px) {
+  /* tighter page margins so we don't waste 20% of viewport on whitespace */
+  .block-container {padding-top: 1.5rem !important;
+                    padding-bottom: 2rem !important;
+                    padding-left: 1rem !important;
+                    padding-right: 1rem !important;}
+
+  /* welcome / section headings — were too dominant on small screens */
+  h1 {font-size: 1.85rem !important; line-height: 1.25 !important;}
+  h2 {font-size: 1.35rem !important; line-height: 1.3 !important;}
+
+  /* question screen — keep title prominent but smaller */
+  .q-tag {font-size: 0.75rem !important; margin-bottom: 0.4rem !important;}
+  .q-title {font-size: 1.15rem !important; line-height: 1.35 !important;
+            margin-bottom: 1rem !important;}
+  .q-prompt {font-size: 0.98rem !important; line-height: 1.55 !important;
+             margin-bottom: 1.2rem !important;}
+
+  /* textarea — slightly shorter so the keyboard doesn't push everything
+     offscreen on small phones. font-size: 16px prevents iOS auto-zoom. */
+  .stTextArea textarea {
+      min-height: 180px !important;
+      font-size: 16px !important;   /* 16px = no iOS keyboard zoom */
+      line-height: 1.5 !important;
+      padding: 0.8rem !important;
+  }
+
+  /* email input — same 16px trick to disable iOS zoom on focus */
+  .stTextInput input {font-size: 16px !important;}
+
+  /* button row — make sure they're full-width and tap-friendly */
+  .stButton button {
+      padding: 0.7rem 1.4rem !important;
+      font-size: 0.95rem !important;
+      width: 100% !important;
+      min-height: 44px !important;   /* Apple's tap-target minimum */
+  }
+
+  /* profile bar layout — labels were 220px fixed, which broke at small width.
+     Stack the label above the bar on narrow screens. */
+  .profile-row {flex-direction: column !important; align-items: stretch !important;
+                margin-bottom: 1rem !important;}
+  .profile-label {width: auto !important; margin-bottom: 0.3rem !important;
+                  font-size: 0.95rem !important;}
+  .profile-pct {width: auto !important; text-align: right !important;
+                padding-left: 0 !important; margin-top: 0.2rem !important;
+                font-size: 0.85rem !important;}
+
+  /* career row */
+  .career-title {font-size: 1.02rem !important;}
+  .career-match {font-size: 0.88rem !important;}
+}
 </style>
 """, unsafe_allow_html=True)
 
