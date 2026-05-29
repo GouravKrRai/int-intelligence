@@ -113,6 +113,11 @@ def update_progress(session_id: str, step: str, answers: dict[str, str]) -> None
     """Update an existing session row with the latest step + answers. Called
     on every Continue/Back click. Silent on failure so the app keeps working
     even if the DB is briefly unreachable.
+
+    Importantly, MERGES into existing metadata (rather than overwriting it),
+    so the rich analytics dict written by save_session() — word counts, time
+    per question, top intelligence, etc. — is preserved if it was already
+    written before this transition fires.
     """
     client = get_client()
     if client is None or not session_id:
@@ -123,7 +128,24 @@ def update_progress(session_id: str, step: str, answers: dict[str, str]) -> None
             col = _QID_TO_COL.get(qid)
             if col and text:
                 update[col] = text
-        update["metadata"] = {"current_step": step, "pending": True}
+
+        # Read existing metadata so we can merge instead of clobber.
+        existing = (client.table("sessions")
+                    .select("metadata")
+                    .eq("id", session_id)
+                    .limit(1)
+                    .execute())
+        prev_meta: dict[str, Any] = {}
+        if existing.data:
+            prev_meta = existing.data[0].get("metadata") or {}
+        prev_meta["current_step"] = step
+        # only mark pending if save_session hasn't already finalized it
+        prev_meta.setdefault("pending", True)
+        if step == "results" and prev_meta.get("pending") is not True:
+            # save_session already ran; leave pending=False as-is
+            pass
+        update["metadata"] = prev_meta
+
         client.table("sessions").update(update).eq("id", session_id).execute()
     except Exception as e:
         print(f"[db] update_progress failed: {e}")
