@@ -178,10 +178,17 @@ def load_progress(session_id: str) -> dict | None:
         step = meta.get("current_step", "welcome")
         # rebuild the scored dict from the evidence_json so the results screen
         # can show "score X/10 · evidence ..." without re-running the LLM.
-        # Stored evidence has only the text; score is 0 by default and is
-        # only used as a fallback if available.
+        # evidence_json may be in two shapes:
+        #   new: {intel: {"score": int, "evidence": "..."}}
+        #   old: {intel: "string"}  (rows saved before the score-preservation fix)
         evidence = row.get("evidence_json") or {}
-        scored = {k: {"score": 0, "evidence": v} for k, v in evidence.items()}
+        scored = {}
+        for k, v in evidence.items():
+            if isinstance(v, dict):
+                scored[k] = {"score": v.get("score", 0),
+                             "evidence": v.get("evidence", "")}
+            else:
+                scored[k] = {"score": 0, "evidence": v or ""}
         return {
             "step": step,
             "answers": answers,
@@ -229,10 +236,15 @@ def save_session(
     if client is None:
         return None
 
-    # extract evidence-only mapping (drop the LLM score numbers; keep evidence)
-    evidence = {k: v.get("evidence", "") for k, v in scored.items()}
+    # Store BOTH the 0-10 score AND the evidence text per intelligence,
+    # so the PDF can display "Logical-Mathematical 9/10" with its evidence.
+    # evidence_json shape: {intel: {"score": int, "evidence": "..."}}
+    evidence = {
+        k: {"score": v.get("score", 0), "evidence": v.get("evidence", "")}
+        for k, v in scored.items()
+    }
 
-    # keep only fields needed for analytics in top_matches (saves space)
+    # keep top 20 matches with the fields needed for analytics + chart
     matches_slim = [
         {
             "rank": i + 1,
@@ -242,7 +254,7 @@ def save_session(
             "gardner_cos": round(m.get("gardner_cos", 0.0), 4),
             "content_cos": round(m.get("content_cos", 0.0), 4) if m.get("content_cos") is not None else None,
         }
-        for i, m in enumerate(matches[:10])
+        for i, m in enumerate(matches[:20])
     ]
 
     # normalize email to lowercase (so john@x.com and JOHN@X.COM count as same)
@@ -356,8 +368,17 @@ def request_report_email(session_id: str, email: str) -> tuple[bool, str]:
         profile = row.get("profile_json") or {}
         evidence = row.get("evidence_json") or {}
         top_matches = row.get("top_matches_json") or []
-        # evidence_json is {intel: "string"} — reshape to scorer format
-        scored = {k: {"score": 0, "evidence": v} for k, v in evidence.items()}
+        # evidence_json may be in either of two shapes:
+        #   new format: {intel: {"score": int, "evidence": "..."}}
+        #   old format (rows saved before the fix): {intel: "string"}
+        # Normalize to the scorer format the PDF expects.
+        scored = {}
+        for k, v in evidence.items():
+            if isinstance(v, dict):
+                scored[k] = {"score": v.get("score", 0),
+                             "evidence": v.get("evidence", "")}
+            else:
+                scored[k] = {"score": 0, "evidence": v or ""}
 
         # Build the PDF — pass top_matches as all_matches so the career-map
         # chart renders (with top 20 as both labelled dots and as the cloud).
