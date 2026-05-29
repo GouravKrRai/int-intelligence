@@ -272,6 +272,24 @@ def save_session(
 
     try:
         if existing_id:
+            # Defensive: if this row was already finalized (has both profile
+            # and top_matches), DON'T overwrite it. This prevents temp=0 drift
+            # from corrupting the canonical first-render numbers when the
+            # pipeline accidentally re-runs (e.g. after a refresh, race
+            # conditions, etc.). The user's official result is whatever was
+            # first saved — refresh should display it unchanged forever.
+            existing = (client.table("sessions")
+                        .select("profile_json,top_matches_json")
+                        .eq("id", existing_id)
+                        .limit(1)
+                        .execute())
+            if existing.data:
+                e0 = existing.data[0]
+                already_finalized = (e0.get("profile_json") is not None
+                                     and e0.get("top_matches_json") is not None)
+                if already_finalized:
+                    # Row already has results — keep them.
+                    return existing_id
             result = client.table("sessions").update(row).eq("id", existing_id).execute()
             if result.data:
                 return existing_id
