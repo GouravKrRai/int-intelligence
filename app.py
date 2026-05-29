@@ -578,30 +578,39 @@ def screen_question(idx: int) -> None:
 def screen_loading() -> None:
     first_run = "_embedder_warm" not in st.session_state
 
-    # Two-pass render so the previous question's DOM is fully cleared before
-    # the blocking LLM call begins. Without this, the textarea + prompt from
-    # Q7 stays visible UNDERNEATH the "Reading you..." message until the
-    # ~10-second llm_score() call returns and a final rerun fires.
-    #   Pass 1: just emit the loading UI and st.rerun() — this commits a frame
-    #           where the previous elements get cleared.
-    #   Pass 2: emit the loading UI again AND do the actual work.
+    # Full-screen opaque overlay that covers EVERYTHING beneath it — the
+    # previous question's textarea + prompt cannot bleed through. This is
+    # more robust than relying on Streamlit's element diffing (which doesn't
+    # clear stale widgets until the script returns, leaving a ~10s window
+    # where the user sees ghost UI).
+    #
+    # The overlay is fixed-positioned, full viewport, z-index above any
+    # Streamlit element, and contains the loading text centered.
+    subtitle = ("This is your first read of the day — give it a minute "
+                "while the language model loads. Subsequent reads will be fast."
+                if first_run else
+                "This usually takes about 15 seconds.")
     st.markdown(
-        "<div style='text-align:center; padding:6rem 0; color:#555;'>"
-        "<h2 style='color:#222;'>Reading you...</h2>"
-        "<p style='font-size:1.05rem; color:#777; margin-top:1.5rem;'>"
-        + ("This is your first read of the day — give it a minute while "
-           "the language model loads. Subsequent reads will be fast."
-           if first_run else
-           "This usually takes about 15 seconds.")
-        + "</p></div>",
+        f"""
+        <div style="
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: white; z-index: 999999;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            font-family: Georgia, serif;
+            padding: 2rem; text-align: center;
+        ">
+          <h2 style="color: #222; font-size: 2rem; margin: 0 0 1.5rem;">Reading you...</h2>
+          <p style="color: #777; font-size: 1.05rem; max-width: 32rem;
+                    line-height: 1.6; margin: 0;">{subtitle}</p>
+          <div style="margin-top: 2rem; width: 32px; height: 32px;
+                      border: 3px solid #eee; border-top: 3px solid #222;
+                      border-radius: 50%; animation: int_spin 0.9s linear infinite;"></div>
+          <style>@keyframes int_spin {{ to {{ transform: rotate(360deg); }} }}</style>
+        </div>
+        """,
         unsafe_allow_html=True,
     )
-
-    if not st.session_state.get("_loading_paint_done"):
-        # First pass: only paint the loading UI, then rerun so the DOM
-        # commits with the previous question's widgets removed.
-        st.session_state._loading_paint_done = True
-        st.rerun()
 
     st.session_state._embedder_warm = True
 
