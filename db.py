@@ -154,6 +154,11 @@ def update_progress(session_id: str, step: str, answers: dict[str, str]) -> None
 def load_progress(session_id: str) -> dict | None:
     """Fetch a session by id and return its state in a form that app.py can
     use to rehydrate st.session_state. Returns None if not found.
+
+    Now also returns the previously-computed profile, evidence, and matches
+    so that a refresh on the results screen displays the SAME stored output
+    rather than triggering a fresh LLM run (which may differ by 1-2 points
+    due to Anthropic temp=0 GPU non-determinism).
     """
     client = get_client()
     if client is None or not session_id:
@@ -171,11 +176,20 @@ def load_progress(session_id: str) -> dict | None:
                 answers[qid] = v
         meta = row.get("metadata") or {}
         step = meta.get("current_step", "welcome")
+        # rebuild the scored dict from the evidence_json so the results screen
+        # can show "score X/10 · evidence ..." without re-running the LLM.
+        # Stored evidence has only the text; score is 0 by default and is
+        # only used as a fallback if available.
+        evidence = row.get("evidence_json") or {}
+        scored = {k: {"score": 0, "evidence": v} for k, v in evidence.items()}
         return {
             "step": step,
             "answers": answers,
             "saved_id": row["id"],
             "has_results": bool(row.get("top_matches_json")),
+            "profile": row.get("profile_json") or None,
+            "scored": scored if scored else None,
+            "top_matches": row.get("top_matches_json") or None,
         }
     except Exception as e:
         print(f"[db] load_progress failed: {e}")

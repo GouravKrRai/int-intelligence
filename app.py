@@ -325,12 +325,33 @@ def _hydrate_from_url() -> None:
     st.session_state.saved_id = saved.get("saved_id")
     st.session_state.answers = saved.get("answers") or {}
 
-    # If results were already computed, route to results (where the pipeline
-    # will be silently re-run from the saved answers to repopulate matches).
-    # Otherwise route to whatever step they were last on.
+    # If the row has stored results, rehydrate result dict from DB so refresh
+    # shows the SAME numbers — no silent LLM re-run, no temp=0 drift.
+    # The career-map chart's "background cloud" needs all_matches (~2000 rows),
+    # which we do NOT persist (too big). On refresh after results we hide the
+    # cloud — the labelled top-20 dots still render fine.
+    if saved.get("profile") and saved.get("top_matches"):
+        st.session_state.result = {
+            "scored": saved.get("scored") or {},
+            "profile": saved["profile"],
+            "matches": saved["top_matches"],
+            # all_matches is the full 2000-row ranking used only by the cloud
+            # behind the chart. We can't restore it without re-running match().
+            # Use the top 20 as a stand-in so the chart still draws.
+            "all_matches": saved["top_matches"],
+            "used_content": True,
+        }
+
+    # If results were already computed AND we just rehydrated them, go
+    # straight to results. Otherwise route to whatever step they were on.
     step = saved.get("step") or "welcome"
     if step in {"welcome", "loading", "results"}:
-        st.session_state.step = step
+        # Don't land on "loading" on refresh — that would re-run the pipeline.
+        # If we have a rehydrated result, go straight to results.
+        if step == "loading" and st.session_state.get("result"):
+            st.session_state.step = "results"
+        else:
+            st.session_state.step = step
     elif step.startswith("q"):
         st.session_state.step = step
     else:
