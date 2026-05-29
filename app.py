@@ -300,16 +300,15 @@ def _clear_storage() -> None:
 # ---------------- career-map chart ----------------
 
 def render_career_map(all_matches: list[dict], top_matches: list[dict]) -> None:
-    """Scatter of all careers in cosine space, zoomed into the upper-right
-    region where the top 20 actually live. Specs (approved by user):
-      - legend ABOVE the chart, 5 columns × 4 rows
-      - 20 distinct colors, one per career (tab20)
-      - all circles (no rank symbols)
-      - dot size = match %  (biggest dot = #1 match)
-      - cloud of every other career in light grey background
-      - real cosine positions for everything (top 20 + cloud share the space)
-      - zoom adapts to the top-20 bounding box so they spread naturally
-      - axis ticks scaled ×100, no decimals (so e.g. 0.65 reads as "65")
+    """Mobile-friendly career-map chart. Specs:
+      - PORTRAIT aspect (taller than wide) so it doesn't shrink horribly on phones
+      - chart on top, legend BELOW in 2 columns (was 5 columns above)
+      - 20 distinct colors (tab20), one per career
+      - all circles, dot size = match %
+      - cloud of every career in light grey background
+      - zoom adapts to the top-20 bounding box
+      - axis ticks scaled ×100, no decimals
+      - larger fonts than before so they remain legible on small screens
     """
     import matplotlib.pyplot as plt
     import matplotlib.gridspec as gs
@@ -327,53 +326,35 @@ def render_career_map(all_matches: list[dict], top_matches: list[dict]) -> None:
                 m.get("content_cos", 0.0))
                for i, m in enumerate(top_matches, 1)]
 
-    # 20 distinct colors (tab20 — categorical, designed for distinguishability)
     cmap = plt.get_cmap("tab20")
     colors = [cmap(i / 20.0) for i in range(20)]
 
-    # dot size = match % — scale rank-spread so size difference is visible
     pcts = [pct for _, _, pct, _, _ in top_pts]
     p_min, p_max = min(pcts), max(pcts)
     size_range = p_max - p_min if p_max > p_min else 1.0
-    sizes = [350 + 1450 * (pct - p_min) / size_range
+    # slightly smaller base size so dots don't dominate the smaller chart area
+    sizes = [280 + 1100 * (pct - p_min) / size_range
              for _, _, pct, _, _ in top_pts]
 
-    # Figure: legend on TOP, scatter on BOTTOM
-    fig = plt.figure(figsize=(14, 10), dpi=140)
+    # PORTRAIT figure: chart on top, legend below.
+    # hspace generous so x-axis label doesn't collide with legend title.
+    fig = plt.figure(figsize=(9, 11), dpi=140)
     fig.patch.set_facecolor("white")
-    grid = gs.GridSpec(2, 1, height_ratios=[0.45, 1.0], figure=fig, hspace=0.02)
-    ax_legend = fig.add_subplot(grid[0])
-    ax = fig.add_subplot(grid[1])
+    grid = gs.GridSpec(2, 1, height_ratios=[1.0, 0.55], figure=fig, hspace=0.18)
+    ax = fig.add_subplot(grid[0])
+    ax_legend = fig.add_subplot(grid[1])
 
-    # ---- legend (above) ----
-    legend_handles = []
-    for (rank, title, pct, _, _), color in zip(top_pts, colors):
-        label = title if len(title) <= 38 else title[:35] + "…"
-        legend_handles.append(
-            Line2D([0], [0], marker="o", color="w",
-                   markerfacecolor=color, markeredgecolor="white",
-                   markersize=11, markeredgewidth=1.0,
-                   label=f"{rank:>2}. {label}  ({pct:.1f}%)")
-        )
-    ax_legend.legend(handles=legend_handles, loc="center", ncol=5,
-                     fontsize=8.5, frameon=False, handletextpad=0.5,
-                     columnspacing=1.4, labelspacing=0.8,
-                     title="top 20 careers   (dot size = match %)",
-                     title_fontsize=10)
-    ax_legend.axis("off")
-
-    # ---- chart (below) ----
-    # background cloud — every career
+    # ---- chart (top) ----
+    # background cloud
     ax.scatter(xs_all, ys_all, s=10, c="#e6e6e2", alpha=0.55,
                edgecolors="none", zorder=1)
-
-    # top 20 — real cosine positions, all circles, sized by match%
+    # top 20 — real cosine positions
     for (rank, _, _, x, y), color, size in zip(top_pts, colors, sizes):
         ax.scatter([x], [y], s=size, c=[color],
-                   edgecolors="white", linewidths=1.8,
+                   edgecolors="white", linewidths=1.6,
                    alpha=0.95, zorder=3 + (21 - rank))
 
-    # zoom into the upper-right region the top 20 actually occupy
+    # zoom into top-20 region
     top_xs = [x for _, _, _, x, _ in top_pts]
     top_ys = [y for _, _, _, _, y in top_pts]
     x_min, x_max = min(top_xs), max(top_xs)
@@ -383,15 +364,13 @@ def render_career_map(all_matches: list[dict], top_matches: list[dict]) -> None:
     ax.set_xlim(x_min - x_pad, x_max + x_pad)
     ax.set_ylim(y_min - y_pad, y_max + y_pad)
 
-    # ticks ×100, no decimals (so cosine 0.65 reads as "65")
     ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v * 100:.0f}"))
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v * 100:.0f}"))
-
-    ax.set_xlabel("cognitive shape match  →", fontsize=9,
+    ax.set_xlabel("cognitive shape match  →", fontsize=11,
                   color="#777", labelpad=8)
-    ax.set_ylabel("content / interest match  →", fontsize=9,
+    ax.set_ylabel("content / interest match  →", fontsize=11,
                   color="#777", labelpad=8)
-    ax.tick_params(axis="both", colors="#aaa", labelsize=8)
+    ax.tick_params(axis="both", colors="#aaa", labelsize=10)
     ax.set_facecolor("#fafafa")
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
@@ -399,6 +378,24 @@ def render_career_map(all_matches: list[dict], top_matches: list[dict]) -> None:
         ax.spines[spine].set_color("#e0e0e0")
         ax.spines[spine].set_linewidth(0.8)
     ax.grid(True, linestyle="-", linewidth=0.4, color="#eeeeee", zorder=0)
+
+    # ---- legend (below) ----
+    legend_handles = []
+    for (rank, title, pct, _, _), color in zip(top_pts, colors):
+        # titles can be longer here because we have 2 columns instead of 5
+        label = title if len(title) <= 48 else title[:45] + "…"
+        legend_handles.append(
+            Line2D([0], [0], marker="o", color="w",
+                   markerfacecolor=color, markeredgecolor="white",
+                   markersize=11, markeredgewidth=1.0,
+                   label=f"{rank:>2}. {label}  ({pct:.1f}%)")
+        )
+    ax_legend.legend(handles=legend_handles, loc="center", ncol=2,
+                     fontsize=10, frameon=False, handletextpad=0.6,
+                     columnspacing=1.8, labelspacing=0.9,
+                     title="top 20 careers   (dot size = match %)",
+                     title_fontsize=11)
+    ax_legend.axis("off")
 
     st.pyplot(fig, use_container_width=True)
     plt.close(fig)
