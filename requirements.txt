@@ -7,3 +7,4 @@ torch>=2.2
 supabase>=2.30
 python-dotenv>=1.0
 streamlit-local-storage>=0.0.21
+reportlab>=4.0

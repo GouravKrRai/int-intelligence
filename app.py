@@ -707,13 +707,15 @@ def screen_results() -> None:
                 "</p>", unsafe_allow_html=True)
 
     if st.session_state.get("email_sent"):
+        sent_to = st.session_state.get("email_sent_to", "your inbox")
         st.markdown(
-            "<div style='padding:1rem 1.2rem; background:#eaf5ea; "
-            "border-left:3px solid #2e8b57; color:#1a4f1a; "
-            "border-radius:4px; line-height:1.5;'>"
-            "<b>✓ Got it.</b> Your report request has been recorded. "
-            "We'll email it to you shortly."
-            "</div>",
+            f"<div style='padding:1rem 1.2rem; background:#eaf5ea; "
+            f"border-left:3px solid #2e8b57; color:#1a4f1a; "
+            f"border-radius:4px; line-height:1.5;'>"
+            f"<b>✓ Sent.</b> Your PDF report is on its way to "
+            f"<b>{sent_to}</b>. Check your inbox in the next minute or two "
+            f"(don't forget the spam folder if it doesn't appear)."
+            f"</div>",
             unsafe_allow_html=True,
         )
     else:
@@ -744,6 +746,7 @@ def screen_results() -> None:
                 ok, msg = db.request_report_email(sid, email_input)
                 if ok:
                     st.session_state.email_sent = True
+                    st.session_state.email_sent_to = email_input.strip().lower()
                     st.session_state.email_error = None
                 else:
                     st.session_state.email_error = msg

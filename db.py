@@ -252,7 +252,7 @@ def save_session(
 #: These can request reports as many times as they want (useful for
 #: testing, debugging, and personal repeat use by the project owner).
 ADMIN_EMAILS = {
-    "gkrai890@gmail.com",
+    "gourav@decodemr.com",
 }
 
 
@@ -290,7 +290,47 @@ def request_report_email(session_id: str, email: str) -> tuple[bool, str]:
                     "be used once."
                 )
 
-        # mark the session with the email and the send-request timestamp
+        # Pull the session data needed to build the PDF
+        sess = (client.table("sessions")
+                .select("profile_json,evidence_json,top_matches_json")
+                .eq("id", session_id)
+                .limit(1)
+                .execute())
+        if not sess.data:
+            return False, "Couldn't find that session. Please refresh."
+        row = sess.data[0]
+        profile = row.get("profile_json") or {}
+        evidence = row.get("evidence_json") or {}
+        top_matches = row.get("top_matches_json") or []
+        # evidence_json is {intel: "string"} — reshape to scorer format
+        scored = {k: {"score": 0, "evidence": v} for k, v in evidence.items()}
+
+        # Build the PDF
+        try:
+            from pdf_gen import build_pdf
+            pdf_bytes = build_pdf(profile, scored, top_matches,
+                                  all_matches=None,
+                                  user_email=email_clean)
+        except Exception as e:
+            print(f"[db] PDF build failed: {e}")
+            return False, "Couldn't build the PDF. Please try again."
+
+        # Send the email via Gmail SMTP
+        try:
+            from email_sender import send_report, is_configured
+            if not is_configured():
+                # Don't claim it was sent if SMTP isn't wired up.
+                return False, ("Email service isn't configured yet. "
+                               "Your results stay on this page.")
+            ok, msg = send_report(email_clean, pdf_bytes)
+            if not ok:
+                return False, msg
+        except Exception as e:
+            print(f"[db] email send failed: {e}")
+            return False, "Couldn't send the email right now. Please try again."
+
+        # Only mark sent AFTER the email actually went out, so failures
+        # don't permanently lock the recipient out of getting their report.
         from datetime import datetime, timezone
         now_iso = datetime.now(timezone.utc).isoformat()
         (client.table("sessions")
@@ -302,10 +342,7 @@ def request_report_email(session_id: str, email: str) -> tuple[bool, str]:
          .eq("id", session_id)
          .execute())
 
-        return True, (
-            "Your report request is recorded. (Email delivery will be enabled "
-            "soon — for now your results stay accessible here.)"
-        )
+        return True, f"Report sent to {email_clean}. Check your inbox."
     except Exception as e:
         print(f"[db] request_report_email failed: {e}")
         return False, "Something went wrong. Please try again."
