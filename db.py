@@ -252,7 +252,7 @@ def save_session(
 #: These can request reports as many times as they want (useful for
 #: testing, debugging, and personal repeat use by the project owner).
 ADMIN_EMAILS = {
-    "gourav@decodemr.com",
+    "gkrai890@gmail.com",
 }
 
 
