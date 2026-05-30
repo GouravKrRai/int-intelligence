@@ -13,6 +13,7 @@ Reads ANTHROPIC_API_KEY from st.secrets first, then env var as fallback.
 from __future__ import annotations
 import os
 import time
+from pathlib import Path
 
 # defensive: HF Hub's new xet protocol stalls on anonymous downloads — use plain HTTP
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
@@ -100,8 +101,15 @@ def setup_api_key() -> bool:
 
 # ---------------- styling ----------------
 
+# Resolve the favicon path. Streamlit's set_page_config accepts either an
+# emoji, a path-like string, or a PIL.Image / bytes. We point at the 256px
+# PNG — Streamlit will resize automatically for browser tab usage.
+_FAVICON_PATH = Path(__file__).parent / "favicon_256.png"
+_FAVICON = str(_FAVICON_PATH) if _FAVICON_PATH.exists() else "🧠"
+
 st.set_page_config(
     page_title=PRODUCT_NAME,
+    page_icon=_FAVICON,
     layout="centered",
     initial_sidebar_state="collapsed",
 )
