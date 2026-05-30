@@ -768,12 +768,19 @@ def screen_results() -> None:
                 "</p>", unsafe_allow_html=True)
 
     for k in sorted_intel:
-        s = r["scored"][k]
-        if s["score"] >= 4:   # only show evidence for intelligences that scored meaningfully
+        s = r["scored"].get(k) or {}
+        score = s.get("score", 0)
+        evidence_text = (s.get("evidence") or "").strip()
+        # show the card if either (a) the score is meaningful (>= 4) OR
+        # (b) the score is 0 but we have non-empty evidence text. The latter
+        # case covers legacy sessions written before save_session stored
+        # the 0-10 score alongside the evidence text.
+        if (score >= 4) or (score == 0 and evidence_text):
+            score_str = f" · {score}/10" if score > 0 else ""
             st.markdown(
                 f"<div class='evidence-card'>"
-                f"  <div class='evidence-intel'>{PRETTY_LABEL[k]} · {s['score']}/10</div>"
-                f"  <div class='evidence-text'>{s['evidence']}</div>"
+                f"  <div class='evidence-intel'>{PRETTY_LABEL[k]}{score_str}</div>"
+                f"  <div class='evidence-text'>{evidence_text}</div>"
                 f"</div>",
                 unsafe_allow_html=True,
             )
