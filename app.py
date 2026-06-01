@@ -31,28 +31,69 @@ import db
 PRODUCT_NAME = "INT Intelligence"
 TAGLINE = "see the kind of mind you are."
 
+#: For each question we keep a 4-tuple: (qid, short label, prompt, hint).
+#: The hint is a short worked example — DELIBERATELY varied across the
+#: 7 questions so a user sees that any kind of mind is welcome here.
+#: Each example leans on a different dominant intelligence:
+#:   Q1 — naturalistic / spatial
+#:   Q2 — kinesthetic / intrapersonal
+#:   Q3 — logical-mathematical
+#:   Q4 — interpersonal
+#:   Q5 — musical
+#:   Q6 — kinesthetic / bodily
+#:   Q7 — linguistic / intrapersonal
+#: Examples are kept short (≈40-60 words) so they read as inspiration,
+#: not as templates to copy verbatim.
 QUESTIONS = [
     ("Q1", "A place in memory",
      "Describe a place you keep returning to in your memory — not necessarily "
-     "anywhere you still live. What's there? Take me through it."),
+     "anywhere you still live. What's there? Take me through it.",
+     "There’s a stretch of road behind my grandmother’s house in the hills. "
+     "In monsoon the soil smells like wet iron and the millipedes come out. "
+     "In dry months the same path is hard and the lantana bushes get dust "
+     "on their leaves. I used to track which bird sang from which tree."),
     ("Q2", "Something you do",
      "Tell me about something you do that other people find strange or don't "
-     "quite understand. Not a hobby — a small habit, ritual, or quirk."),
+     "quite understand. Not a hobby — a small habit, ritual, or quirk.",
+     "I cannot walk in a straight line when music plays in a store. My step "
+     "shifts to match the beat and my whole rhythm of walking gets re-organized. "
+     "I also straighten strangers’ shoulders in my head — I feel the asymmetry "
+     "in my own back before I even notice I’m doing it."),
     ("Q3", "How does it work",
      "Pick any everyday object or process — a zipper, rain, a key in a lock, "
      "how a fly lands on a wall. Explain how it actually works, the way *you* "
-     "think about it. Don't worry about being scientifically right."),
+     "think about it. Don't worry about being scientifically right.",
+     "When ground gets soaked, water sits between dirt particles as lubricant — "
+     "soft, holds prints. As sun pulls moisture up, particles bind tighter. "
+     "If the top dries faster than the bottom, tension snaps the surface "
+     "open and you get cracks. Slow even drying makes a smooth hard crust."),
     ("Q4", "A fight you remember",
      "Describe a fight or disagreement you remember vividly — even a small one. "
-     "What was the story *behind* the surface story?"),
+     "What was the story *behind* the surface story?",
+     "My sister and I fought about who got to feed the stray cat. I was 11, "
+     "she was 7. On the surface it was about the cat. The real story was that "
+     "she’d told my mother I was lying about feeding it, and I was already "
+     "learning then that being misunderstood was the worst kind of pain."),
     ("Q5", "A sound that stays",
      "There's a sound from your life — not a song — that has stayed with you. "
-     "Describe it. When did you first hear it? Why does it stick?"),
+     "Describe it. When did you first hear it? Why does it stick?",
+     "Waves pulling back over a beach made of smooth rounded stones. A loud, "
+     "hollow, rhythmic clattering as thousands of heavy rocks are dragged "
+     "against each other by the undertow. It sticks because it’s the sound "
+     "of mountains being ground down to sand, in real time."),
     ("Q6", "Body before mind",
-     "Tell me about a moment when your body knew something before your mind did."),
+     "Tell me about a moment when your body knew something before your mind did.",
+     "I tripped near a riverbank and my hands hit wet mud. Before my brain "
+     "even registered I’d fallen, my fingers were already squeezing the water "
+     "out and rolling the mud into a smooth heavy sphere. By the time my "
+     "friends rushed over I was just kneeling there, kneading."),
     ("Q7", "The unworded thing",
      "Describe a feeling or experience that you've never quite found the right "
-     "words for. Try to describe it anyway."),
+     "words for. Try to describe it anyway.",
+     "The ache of finishing a book you didn’t want to end. Not sadness for "
+     "the characters — mourning for a self you only got to be while reading. "
+     "When the book ends, that version of you ends too. You go back to being "
+     "the regular you, and the gap between them is the grief."),
 ]
 
 PRETTY_LABEL = {
@@ -179,6 +220,71 @@ body, .stMarkdown, .stTextArea textarea {font-family: 'Georgia', serif;}
 .q-prompt {font-size: 1.05rem; line-height: 1.6; color: #444;
            margin-bottom: 1.5rem;}
 
+/* ---- hint tooltip (ⓘ icon next to each question prompt) ----
+   Desktop: tooltip appears on hover.
+   Mobile: tap the icon (focus event). Tap outside or focus elsewhere = collapse.
+   The whole thing is pure CSS — no JS state, no Streamlit reruns.        */
+.hint {
+    display: inline-block;
+    position: relative;
+    margin-left: 0.35rem;
+    color: #999;
+    font-size: 1.05rem;
+    cursor: help;
+    user-select: none;
+    vertical-align: baseline;
+    outline: none;
+    /* hide the focus ring on tap — we show the popup instead */
+    -webkit-tap-highlight-color: transparent;
+}
+.hint:hover, .hint:focus, .hint:focus-within {
+    color: #222;
+}
+.hint .hint-body {
+    /* hidden by default; revealed on hover (desktop) or focus (mobile tap) */
+    display: none;
+    position: absolute;
+    /* anchor below the icon so it doesn't get clipped above the page */
+    top: calc(100% + 0.5rem);
+    left: 0;
+    z-index: 9999;
+    width: min(340px, calc(100vw - 3rem));
+    padding: 0.85rem 1rem;
+    background: #1d1b18;
+    color: #f3ede1;
+    font-size: 0.92rem;
+    line-height: 1.55;
+    font-style: normal;
+    border-radius: 6px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+    cursor: text;
+}
+/* the small upward-pointing arrow */
+.hint .hint-body::before {
+    content: "";
+    position: absolute;
+    top: -6px;
+    left: 8px;
+    width: 12px; height: 12px;
+    background: #1d1b18;
+    transform: rotate(45deg);
+    border-radius: 2px;
+}
+.hint .hint-label {
+    display: block;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    color: #d97a4a;
+    margin-bottom: 0.4rem;
+    font-weight: 600;
+}
+/* show on desktop hover OR mobile tap (focus-within catches taps on touch) */
+.hint:hover .hint-body,
+.hint:focus .hint-body,
+.hint:focus-within .hint-body {
+    display: block;
+}
+
 /* textarea */
 .stTextArea textarea {
     min-height: 280px !important;
@@ -238,6 +344,24 @@ body, .stMarkdown, .stTextArea textarea {font-family: 'Georgia', serif;}
             margin-bottom: 1rem !important;}
   .q-prompt {font-size: 0.98rem !important; line-height: 1.55 !important;
              margin-bottom: 1.2rem !important;}
+
+  /* hint tooltip on mobile — tap the ⓘ to reveal, tap outside to dismiss.
+     Slightly smaller font and tighter padding to fit the narrow viewport. */
+  .hint {font-size: 1rem !important; margin-left: 0.4rem !important;
+         /* enlarge tap target on touch screens for accessibility */
+         padding: 0.1rem 0.25rem !important;}
+  .hint .hint-body {
+      width: calc(100vw - 2rem) !important;
+      font-size: 0.88rem !important;
+      padding: 0.75rem 0.9rem !important;
+      /* fix it to a known position so it doesn't get cut at viewport edges */
+      left: auto !important;
+      right: 0 !important;
+  }
+  .hint .hint-body::before {
+      left: auto !important;
+      right: 8px !important;
+  }
 
   /* textarea — slightly shorter so the keyboard doesn't push everything
      offscreen on small phones. font-size: 16px prevents iOS auto-zoom. */
@@ -547,15 +671,30 @@ def screen_welcome() -> None:
 
 
 def screen_question(idx: int) -> None:
-    qid, label, prompt = QUESTIONS[idx]
+    qid, label, prompt, hint = QUESTIONS[idx]
 
     # count visits to this question (so we know if they went back/forth)
     st.session_state.q_visits[qid] = st.session_state.q_visits.get(qid, 0) + 1
 
     st.markdown(f"<div class='q-tag'>{qid} · {label}</div>",
                 unsafe_allow_html=True)
-    st.markdown(f"<div class='q-prompt'>{prompt}</div>",
-                unsafe_allow_html=True)
+    # Prompt + inline info icon. The .hint span is a tabindex=0 element so
+    # mobile (no :hover) reveals the example on TAP via :focus-within.
+    # Desktop reveals on :hover. Tap anywhere outside (or tap again) collapses.
+    # Hint content is escaped for HTML so quotes/&/etc don't break the markup.
+    import html as _html
+    safe_hint = _html.escape(hint).replace("\n", " ")
+    st.markdown(
+        f"<div class='q-prompt'>{prompt}"
+        f"  <span class='hint' tabindex='0' role='button'"
+        f"        aria-label='show an example answer'>ⓘ"
+        f"    <span class='hint-body'>"
+        f"      <span class='hint-label'>EXAMPLE</span>{safe_hint}"
+        f"    </span>"
+        f"  </span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
     answer = st.text_area(
         label="answer",
@@ -632,7 +771,8 @@ def screen_loading() -> None:
 
     # build essays dict in the format scorer.py expects: {label: text}
     essays = {}
-    for (qid, label, prompt) in QUESTIONS:
+    for q in QUESTIONS:
+        qid, label = q[0], q[1]
         ans = st.session_state.answers.get(qid, "").strip()
         if ans:
             essays[f"{qid} — {label}"] = ans
@@ -679,7 +819,8 @@ def screen_loading() -> None:
             # compute time spent on each question (gap between submits)
             time_per_q = {}
             prev_t = st.session_state.get("started_at")
-            for qid, _, _ in QUESTIONS:
+            for q in QUESTIONS:
+                qid = q[0]
                 t = st.session_state.q_timings.get(qid)
                 if t and prev_t:
                     time_per_q[qid] = int(t - prev_t)
