@@ -244,9 +244,14 @@ body, .stMarkdown, .stTextArea textarea {font-family: 'Georgia', serif;}
     /* hidden by default; revealed on hover (desktop) or focus (mobile tap) */
     display: none;
     position: absolute;
-    /* anchor below the icon so it doesn't get clipped above the page */
+    /* anchor below the icon AND to its RIGHT edge so the popup grows
+       LEFTWARD into the page instead of rightward off the viewport.
+       This is the difference between "tooltip fully visible" and
+       "tooltip clipped at the screen edge" — the icon almost always
+       sits at the end of the prompt line, near the right edge.        */
     top: calc(100% + 0.5rem);
-    left: 0;
+    right: 0;
+    left: auto;
     z-index: 9999;
     width: min(340px, calc(100vw - 3rem));
     padding: 0.85rem 1rem;
@@ -258,13 +263,21 @@ body, .stMarkdown, .stTextArea textarea {font-family: 'Georgia', serif;}
     border-radius: 6px;
     box-shadow: 0 6px 20px rgba(0,0,0,0.18);
     cursor: text;
+    text-align: left;
+    /* normal text wrapping — the prompt text uses justify which would
+       otherwise inherit and ruin our hint content */
+    word-spacing: normal;
+    white-space: normal;
 }
-/* the small upward-pointing arrow */
+/* the small upward-pointing arrow — now anchored on the RIGHT side
+   of the tooltip (above the icon), since the tooltip itself anchors
+   to the right edge of the icon */
 .hint .hint-body::before {
     content: "";
     position: absolute;
     top: -6px;
-    left: 8px;
+    right: 8px;
+    left: auto;
     width: 12px; height: 12px;
     background: #1d1b18;
     transform: rotate(45deg);
@@ -346,7 +359,8 @@ body, .stMarkdown, .stTextArea textarea {font-family: 'Georgia', serif;}
              margin-bottom: 1.2rem !important;}
 
   /* hint tooltip on mobile — tap the ⓘ to reveal, tap outside to dismiss.
-     Slightly smaller font and tighter padding to fit the narrow viewport. */
+     Right-anchored (same as desktop) so it never gets clipped on narrow
+     viewports. Smaller font + tighter padding for small screens. */
   .hint {font-size: 1rem !important; margin-left: 0.4rem !important;
          /* enlarge tap target on touch screens for accessibility */
          padding: 0.1rem 0.25rem !important;}
@@ -354,13 +368,6 @@ body, .stMarkdown, .stTextArea textarea {font-family: 'Georgia', serif;}
       width: calc(100vw - 2rem) !important;
       font-size: 0.88rem !important;
       padding: 0.75rem 0.9rem !important;
-      /* fix it to a known position so it doesn't get cut at viewport edges */
-      left: auto !important;
-      right: 0 !important;
-  }
-  .hint .hint-body::before {
-      left: auto !important;
-      right: 8px !important;
   }
 
   /* textarea — slightly shorter so the keyboard doesn't push everything
