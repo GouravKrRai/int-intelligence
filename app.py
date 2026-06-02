@@ -241,48 +241,40 @@ body, .stMarkdown, .stTextArea textarea {font-family: 'Georgia', serif;}
     color: #222;
 }
 .hint .hint-body {
-    /* hidden by default; revealed on hover (desktop) or focus (mobile tap) */
+    /* hidden by default; revealed on hover (desktop) or focus (mobile tap).
+       Uses position: fixed so it escapes ALL ancestor clipping AND lives
+       in viewport coordinates — guaranteed no edge clipping on any device
+       at any scroll position. We let it stretch comfortably with side
+       margins, then center it inside the visible viewport.                */
     display: none;
-    position: absolute;
-    /* anchor below the icon AND to its RIGHT edge so the popup grows
-       LEFTWARD into the page instead of rightward off the viewport.
-       This is the difference between "tooltip fully visible" and
-       "tooltip clipped at the screen edge" — the icon almost always
-       sits at the end of the prompt line, near the right edge.        */
-    top: calc(100% + 0.5rem);
-    right: 0;
-    left: auto;
+    position: fixed;
+    /* leave a clean inset margin on every side so it never touches the
+       screen edge; the browser computes left/right automatically.        */
+    left: 1rem;
+    right: 1rem;
+    /* small offset below the menu/header area so the popup doesn't
+       slap up against the very top of the viewport.                      */
+    top: 6rem;
+    max-width: 420px;
+    margin-left: auto;
+    margin-right: auto;
     z-index: 9999;
-    width: min(340px, calc(100vw - 3rem));
-    padding: 0.85rem 1rem;
+    padding: 1rem 1.1rem;
     background: #1d1b18;
     color: #f3ede1;
-    font-size: 0.92rem;
+    font-size: 0.95rem;
     line-height: 1.55;
     font-style: normal;
-    border-radius: 6px;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25);
     cursor: text;
     text-align: left;
-    /* normal text wrapping — the prompt text uses justify which would
-       otherwise inherit and ruin our hint content */
     word-spacing: normal;
     white-space: normal;
 }
-/* the small upward-pointing arrow — now anchored on the RIGHT side
-   of the tooltip (above the icon), since the tooltip itself anchors
-   to the right edge of the icon */
-.hint .hint-body::before {
-    content: "";
-    position: absolute;
-    top: -6px;
-    right: 8px;
-    left: auto;
-    width: 12px; height: 12px;
-    background: #1d1b18;
-    transform: rotate(45deg);
-    border-radius: 2px;
-}
+/* No arrow on the fixed tooltip — since it's no longer anchored to the
+   icon's position, an arrow would point at nothing. The dark color +
+   shadow + "EXAMPLE" label communicate it clearly enough.               */
 .hint .hint-label {
     display: block;
     font-size: 0.7rem;
@@ -359,15 +351,18 @@ body, .stMarkdown, .stTextArea textarea {font-family: 'Georgia', serif;}
              margin-bottom: 1.2rem !important;}
 
   /* hint tooltip on mobile — tap the ⓘ to reveal, tap outside to dismiss.
-     Right-anchored (same as desktop) so it never gets clipped on narrow
-     viewports. Smaller font + tighter padding for small screens. */
+     The base .hint-body uses position: fixed with left/right insets so it
+     centers inside the viewport regardless of where the icon sits.
+     The override here only tweaks font size + tap-target size on small
+     screens. */
   .hint {font-size: 1rem !important; margin-left: 0.4rem !important;
          /* enlarge tap target on touch screens for accessibility */
          padding: 0.1rem 0.25rem !important;}
   .hint .hint-body {
-      width: calc(100vw - 2rem) !important;
-      font-size: 0.88rem !important;
-      padding: 0.75rem 0.9rem !important;
+      font-size: 0.92rem !important;
+      padding: 0.9rem 1rem !important;
+      /* push the tooltip down a bit from the URL bar on phones */
+      top: 5rem !important;
   }
 
   /* textarea — slightly shorter so the keyboard doesn't push everything
