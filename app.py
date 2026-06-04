@@ -638,14 +638,14 @@ def screen_welcome() -> None:
                 f"{TAGLINE}</p>", unsafe_allow_html=True)
     st.markdown(
         "<div style='margin: 2rem 0; color:#444; line-height:1.55; font-size:0.9rem;'>"
-        "You will see seven short prompts. Answer each one honestly and "
-        "specifically — there are no right answers, and length is not the point. "
-        "Write the way you'd talk to a friend who's curious about you."
-        "<br><br>"
         "From what you notice, how you reason, and the images you reach for, this "
         "maps the shape of your mind — the kinds of work and the kinds of people "
         "whose minds move like yours. Don't think too hard; it only works if you "
         "don't try to sound smart."
+        "<br><br>"
+        "You will see seven short prompts. Answer each one honestly and "
+        "specifically — there are no right answers, and length is not the point. "
+        "Write the way you'd talk to a friend who's curious about you."
         "</div>",
         unsafe_allow_html=True,
     )
