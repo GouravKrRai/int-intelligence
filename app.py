@@ -646,13 +646,18 @@ def screen_welcome() -> None:
         .int-lead { max-width:34rem; margin:1.8rem auto 0; color:#3f4a39;
             line-height:1.6; font-size:1rem; text-align:center; }
         .int-lead p { margin:0 0 1rem; }
-        .st-key-begin_btn { display:flex; justify-content:center; margin:1.9rem 0 0; }
+        .st-key-begin_btn { display:flex !important; justify-content:center !important;
+            margin:1.9rem 0 0; }
+        .st-key-begin_btn > div { width:100%; display:flex !important;
+            justify-content:center !important; }
         .st-key-begin_btn button {
             background:linear-gradient(180deg,#6fb81e 0%,#5ca701 100%) !important;
             color:#ffffff !important; border:none !important; border-radius:999px !important;
-            padding:1rem 3.2rem !important; font-size:1.15rem !important;
-            font-weight:700 !important; font-family:system-ui,-apple-system,sans-serif !important;
+            padding:1.2rem 3.8rem !important; font-size:1.45rem !important;
+            font-weight:800 !important; font-family:system-ui,-apple-system,sans-serif !important;
             box-shadow:0 0 0 9px rgba(124,181,24,0.18), 0 12px 26px rgba(92,167,1,0.30) !important; }
+        .st-key-begin_btn button p, .st-key-begin_btn button div {
+            font-size:1.45rem !important; font-weight:800 !important; }
         .int-feat { text-align:center; padding:2.4rem 0 0.4rem; }
         .int-feat-h { font-size:1.85rem; font-weight:700; color:#1c2b16; margin:1rem 0 0.4rem; }
         .int-feat-sub { color:#6a6a6a; font-size:1rem; margin:0 auto 1.5rem;
