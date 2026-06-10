@@ -1082,97 +1082,150 @@ def screen_results() -> None:
         go("welcome")
         return
 
-    st.markdown(f"<h2 style='margin-bottom:0.2rem;'>your profile</h2>",
-                unsafe_allow_html=True)
-    st.markdown("<p style='color:#666; margin-bottom:2rem;'>"
-                "how your eight intelligences balance, based on what you wrote."
-                "</p>", unsafe_allow_html=True)
+    st.markdown(
+        """
+        <style>
+        .stApp { background:#f5f7f4 !important; }
+        .res-sec { text-align:center; margin-top:3rem; }
+        .res-pill { display:inline-block; background:#eaf6d6; color:#5ca701; font-weight:700;
+            font-size:0.8rem; letter-spacing:0.04em; text-transform:uppercase; padding:0.4rem 1rem;
+            border-radius:999px; font-family:system-ui,sans-serif; }
+        .res-h { font-size:1.85rem; font-weight:700; color:#1c2b16; margin:0.9rem 0 0.4rem; }
+        .res-sub { color:#6a6a6a; font-size:1rem; margin:0 auto 1.4rem; max-width:32rem; line-height:1.5; }
+        .res-card { background:#fff; border-radius:18px; padding:1.6rem 1.5rem;
+            box-shadow:0 8px 22px rgba(20,40,20,0.07); }
+        .profile-row { display:grid !important; grid-template-columns:9.5rem 1fr 3rem !important;
+            align-items:center; gap:0.7rem; margin:0.6rem 0 !important; }
+        .profile-label { font-size:0.85rem !important; color:#333 !important; }
+        .profile-bar-bg { background:#eef0ec !important; border-radius:7px !important;
+            height:0.85rem !important; overflow:hidden; }
+        .profile-bar-fg { height:100% !important; border-radius:7px !important;
+            background:linear-gradient(90deg,#6fb81e,#5ca701) !important; }
+        .profile-pct { font-size:0.82rem !important; color:#5ca701 !important; font-weight:700 !important;
+            text-align:right; font-family:system-ui,sans-serif; }
+        .evidence-card { background:#fff !important; border-radius:16px !important;
+            padding:1.2rem 1.3rem !important; margin:0.8rem 0 !important;
+            box-shadow:0 6px 18px rgba(20,40,20,0.06) !important; border-left:4px solid #5ca701 !important; }
+        .evidence-intel { font-weight:700 !important; color:#1c2b16 !important; font-size:1rem !important;
+            margin-bottom:0.4rem; }
+        .ev-score { background:#eaf6d6; color:#5ca701; font-size:0.72rem; font-weight:700;
+            padding:0.15rem 0.55rem; border-radius:999px; font-family:system-ui,sans-serif; margin-left:0.4rem; }
+        .evidence-text { color:#555 !important; font-size:0.92rem !important; line-height:1.55 !important; }
+        .career-row { display:grid !important; grid-template-columns:2.4rem 1fr 5rem !important;
+            align-items:center; gap:0.6rem; padding:0.6rem 0 !important;
+            border-bottom:1px solid #f0eeea !important; }
+        .career-rank { font-size:0.78rem !important; color:#b3b3b3 !important; font-family:system-ui,sans-serif; }
+        .career-title { font-size:0.9rem !important; color:#222 !important; }
+        .career-match { font-size:0.82rem !important; color:#5ca701 !important; font-weight:700 !important;
+            text-align:right; font-family:system-ui,sans-serif; }
+        .stApp input { border:1.5px solid #dfe5df !important; border-radius:14px !important;
+            padding:0.9rem 1.1rem !important; font-size:1rem !important; }
+        .stApp input:focus { border-color:#7cb518 !important;
+            box-shadow:0 0 0 4px rgba(124,181,24,0.15) !important; }
+        .stApp div[class*="st-key-send_report_btn"] button {
+            background-image:linear-gradient(180deg,#6fb81e,#5ca701) !important;
+            background-color:#5ca701 !important; color:#fff !important; border:2px solid #5ca701 !important;
+            border-radius:999px !important; padding:0.85rem 2.6rem !important; font-weight:800 !important;
+            box-shadow:0 8px 20px rgba(92,167,1,0.28) !important; transition:background-color .15s,color .15s; }
+        .stApp div[class*="st-key-send_report_btn"] button p,
+        .stApp div[class*="st-key-send_report_btn"] button div,
+        .stApp div[class*="st-key-send_report_btn"] button span { color:#fff !important; font-weight:800 !important; }
+        .stApp div[class*="st-key-send_report_btn"] button:hover { background-image:none !important;
+            background-color:#fff !important; }
+        .stApp div[class*="st-key-send_report_btn"] button:hover p,
+        .stApp div[class*="st-key-send_report_btn"] button:hover div,
+        .stApp div[class*="st-key-send_report_btn"] button:hover span { color:#2e8f5b !important; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        "<div class='res-sec'><span class='res-pill'>Your profile</span>"
+        "<h2 class='res-h'>How your eight intelligences balance</h2>"
+        "<p class='res-sub'>Based on what you wrote — not how you wrote it.</p></div>",
+        unsafe_allow_html=True,
+    )
 
     # sort intelligences by score (descending) for the chart
     sorted_intel = sorted(INTEL, key=lambda k: r["profile"][k], reverse=True)
     max_pct = max(r["profile"].values()) or 1.0
+    _bars = ""
     for k in sorted_intel:
         pct = r["profile"][k]
         width = (pct / max_pct) * 100
-        st.markdown(
+        _bars += (
             f"<div class='profile-row'>"
-            f"  <div class='profile-label'>{PRETTY_LABEL[k]}</div>"
-            f"  <div class='profile-bar-bg'>"
-            f"    <div class='profile-bar-fg' style='width:{width:.1f}%;'></div>"
-            f"  </div>"
-            f"  <div class='profile-pct'>{pct:.1f}%</div>"
-            f"</div>",
-            unsafe_allow_html=True,
+            f"<div class='profile-label'>{PRETTY_LABEL[k]}</div>"
+            f"<div class='profile-bar-bg'>"
+            f"<div class='profile-bar-fg' style='width:{width:.1f}%;'></div></div>"
+            f"<div class='profile-pct'>{pct:.1f}%</div>"
+            f"</div>"
         )
+    st.markdown(f"<div class='res-card'>{_bars}</div>", unsafe_allow_html=True)
 
-    st.markdown("<hr style='margin:3rem 0; border:none; border-top:1px solid #ddd;'>",
-                unsafe_allow_html=True)
-    st.markdown(f"<h2 style='margin-bottom:0.2rem;'>what we saw in you</h2>",
-                unsafe_allow_html=True)
-    st.markdown("<p style='color:#666; margin-bottom:2rem;'>"
-                "the specific signals from your answers."
-                "</p>", unsafe_allow_html=True)
-
+    st.markdown(
+        "<div class='res-sec'><span class='res-pill'>What we saw in you</span>"
+        "<h2 class='res-h'>The signals behind each score</h2>"
+        "<p class='res-sub'>Every score is anchored in specific things you wrote.</p></div>",
+        unsafe_allow_html=True,
+    )
+    _ev = ""
     for k in sorted_intel:
         s = r["scored"].get(k) or {}
         score = s.get("score", 0)
         evidence_text = (s.get("evidence") or "").strip()
         # show the card if either (a) the score is meaningful (>= 4) OR
-        # (b) the score is 0 but we have non-empty evidence text. The latter
-        # case covers legacy sessions written before save_session stored
-        # the 0-10 score alongside the evidence text.
+        # (b) the score is 0 but we have non-empty evidence text.
         if (score >= 4) or (score == 0 and evidence_text):
-            score_str = f" · {score}/10" if score > 0 else ""
-            st.markdown(
+            score_str = (f"<span class='ev-score'>{score} / 10</span>"
+                         if score > 0 else "")
+            _ev += (
                 f"<div class='evidence-card'>"
-                f"  <div class='evidence-intel'>{PRETTY_LABEL[k]}{score_str}</div>"
-                f"  <div class='evidence-text'>{evidence_text}</div>"
-                f"</div>",
-                unsafe_allow_html=True,
+                f"<div class='evidence-intel'>{PRETTY_LABEL[k]} {score_str}</div>"
+                f"<div class='evidence-text'>{evidence_text}</div>"
+                f"</div>"
             )
+    st.markdown(_ev, unsafe_allow_html=True)
 
     # ---- career map (2D scatter with labeled top-10) ----
     if r.get("all_matches"):
-        st.markdown("<hr style='margin:3rem 0; border:none; border-top:1px solid #ddd;'>",
-                    unsafe_allow_html=True)
-        st.markdown(f"<h2 style='margin-bottom:0.2rem;'>your career map</h2>",
-                    unsafe_allow_html=True)
-        st.markdown("<p style='color:#666; margin-bottom:1.5rem;'>"
-                    "every career we know, plotted on two axes — how well it "
-                    "fits the shape of your mind (horizontal), and how close "
-                    "its day-to-day matches what you wrote about (vertical). "
-                    "your top 20 are colored; each dot's size is its match %. "
-                    "upper-right = best fit."
-                    "</p>", unsafe_allow_html=True)
-        render_career_map(r["all_matches"], r["matches"])
-
-    st.markdown("<hr style='margin:3rem 0; border:none; border-top:1px solid #ddd;'>",
-                unsafe_allow_html=True)
-    st.markdown(f"<h2 style='margin-bottom:0.2rem;'>careers that match the shape of your mind</h2>",
-                unsafe_allow_html=True)
-    st.markdown("<p style='color:#666; margin-bottom:2rem;'>"
-                "people whose profession asks for the same blend of intelligences you have."
-                "</p>", unsafe_allow_html=True)
-
-    for i, m in enumerate(r["matches"], 1):
         st.markdown(
-            f"<div class='career-row'>"
-            f"  <div class='career-rank'>#{i:02d}</div>"
-            f"  <div class='career-title'>{m['title']}</div>"
-            f"  <div class='career-match'>{m['match_pct']:.1f}% match</div>"
-            f"</div>",
+            "<div class='res-sec'><span class='res-pill'>Your career map</span>"
+            "<h2 class='res-h'>Every career, placed by how it fits you</h2>"
+            "<p class='res-sub'>Fit to the shape of your mind (across) and to what you "
+            "wrote about (up). Your top 20 are colored; dot size is the match. "
+            "Upper-right = best fit.</p></div>",
             unsafe_allow_html=True,
         )
+        render_career_map(r["all_matches"], r["matches"])
+
+    st.markdown(
+        "<div class='res-sec'><span class='res-pill'>Where you fit</span>"
+        "<h2 class='res-h'>Careers that match the shape of your mind</h2>"
+        "<p class='res-sub'>People whose profession asks for the same blend of "
+        "intelligences you have.</p></div>",
+        unsafe_allow_html=True,
+    )
+    _careers = ""
+    for i, m in enumerate(r["matches"], 1):
+        _careers += (
+            f"<div class='career-row'>"
+            f"<div class='career-rank'>#{i:02d}</div>"
+            f"<div class='career-title'>{m['title']}</div>"
+            f"<div class='career-match'>{m['match_pct']:.1f}%</div>"
+            f"</div>"
+        )
+    st.markdown(f"<div class='res-card'>{_careers}</div>", unsafe_allow_html=True)
 
     # ---- email capture for report sending ----
-    st.markdown("<hr style='margin:3rem 0; border:none; border-top:1px solid #ddd;'>",
-                unsafe_allow_html=True)
-    st.markdown(f"<h2 style='margin-bottom:0.2rem;'>get this report by email</h2>",
-                unsafe_allow_html=True)
-    st.markdown("<p style='color:#666; margin-bottom:1.5rem;'>"
-                "Want this report sent to you as a PDF? Enter your email below. "
-                "Each email can only be used once."
-                "</p>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='res-sec'><span class='res-pill'>Keep it</span>"
+        "<h2 class='res-h'>Get this report by email</h2>"
+        "<p class='res-sub'>We'll send you the full PDF, chart and all. "
+        "Each email can only be used once.</p></div>",
+        unsafe_allow_html=True,
+    )
 
     if st.session_state.get("email_sent"):
         sent_to = st.session_state.get("email_sent_to", "your inbox")
