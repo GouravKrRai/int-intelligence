@@ -695,7 +695,10 @@ def screen_welcome() -> None:
         unsafe_allow_html=True,
     )
 
-    clicked = st.button("Start with a test", key="begin_btn")
+    _bl, _bc, _br = st.columns([1, 2, 1])
+    with _bc:
+        clicked = st.button("Start with a test", key="begin_btn",
+                            use_container_width=True)
 
     st.markdown(
         "<div class='int-lead'>"
