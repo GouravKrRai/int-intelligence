@@ -825,8 +825,56 @@ def screen_question(idx: int) -> None:
     # count visits to this question (so we know if they went back/forth)
     st.session_state.q_visits[qid] = st.session_state.q_visits.get(qid, 0) + 1
 
-    st.markdown(f"<div class='q-tag'>{qid} · {label}</div>",
-                unsafe_allow_html=True)
+    st.markdown(
+        """
+        <style>
+        .stApp { background:#f5f7f4 !important; }
+        .iq-progtop { display:flex; justify-content:space-between; margin:0.4rem 0 0.5rem;
+            font-family:system-ui,sans-serif; font-size:0.85rem; color:#7a8a76; font-weight:600; }
+        .iq-track { height:8px; background:#e3e8e3; border-radius:999px; overflow:hidden;
+            margin-bottom:1.4rem; }
+        .iq-fill { height:100%; background:linear-gradient(90deg,#6fb81e,#5ca701); border-radius:999px; }
+        .iq-pillwrap { text-align:center; margin-top:0.8rem; }
+        .iq-pill { display:inline-block; background:#eaf6d6; color:#5ca701; font-weight:700;
+            font-size:0.8rem; letter-spacing:0.04em; text-transform:uppercase; padding:0.4rem 1rem;
+            border-radius:999px; font-family:system-ui,sans-serif; }
+        .q-prompt { text-align:center !important; font-size:1.5rem !important; line-height:1.42 !important;
+            color:#1c2b16 !important; font-weight:700 !important; max-width:36rem !important;
+            margin:1.1rem auto 1.4rem !important; }
+        .stApp textarea { border:1.5px solid #dfe5df !important; border-radius:16px !important;
+            padding:1.1rem 1.2rem !important; font-size:1.05rem !important; line-height:1.6 !important;
+            background:#ffffff !important; }
+        .stApp textarea:focus { border-color:#7cb518 !important;
+            box-shadow:0 0 0 4px rgba(124,181,24,0.15) !important; }
+        .stApp div[class*="st-key-next_"] button {
+            background-image:linear-gradient(180deg,#6fb81e,#5ca701) !important;
+            background-color:#5ca701 !important; color:#ffffff !important;
+            border:2px solid #5ca701 !important; border-radius:999px !important;
+            padding:0.8rem 2.6rem !important; font-weight:800 !important;
+            box-shadow:0 8px 20px rgba(92,167,1,0.28) !important;
+            transition:background-color .15s, color .15s; }
+        .stApp div[class*="st-key-next_"] button p, .stApp div[class*="st-key-next_"] button div,
+        .stApp div[class*="st-key-next_"] button span { color:#ffffff !important; font-weight:800 !important; }
+        .stApp div[class*="st-key-next_"] button:hover { background-image:none !important;
+            background-color:#ffffff !important; }
+        .stApp div[class*="st-key-next_"] button:hover p, .stApp div[class*="st-key-next_"] button:hover div,
+        .stApp div[class*="st-key-next_"] button:hover span { color:#2e8f5b !important; }
+        .stApp div[class*="st-key-next_"] button:disabled { background-image:none !important;
+            background-color:#cfd6cc !important; border-color:#cfd6cc !important; box-shadow:none !important; }
+        .stApp div[class*="st-key-back_"] button { background:none !important; border:none !important;
+            color:#8a9885 !important; box-shadow:none !important; font-weight:600 !important; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    _total = len(QUESTIONS)
+    _pct = (idx + 1) / _total * 100
+    st.markdown(
+        f"<div class='iq-progtop'><span>Question {idx + 1} of {_total}</span></div>"
+        f"<div class='iq-track'><div class='iq-fill' style='width:{_pct:.0f}%'></div></div>"
+        f"<div class='iq-pillwrap'><span class='iq-pill'>{label}</span></div>",
+        unsafe_allow_html=True,
+    )
     # Prompt + inline info icon. The .hint span is a tabindex=0 element so
     # mobile (no :hover) reveals the example on TAP via :focus-within.
     # Desktop reveals on :hover. Tap anywhere outside (or tap again) collapses.
