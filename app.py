@@ -632,24 +632,150 @@ def render_career_map(all_matches: list[dict], top_matches: list[dict]) -> None:
 # ---------------- screens ----------------
 
 def screen_welcome() -> None:
-    st.markdown(f"<h1 style='margin-bottom:0.3rem;'>{PRODUCT_NAME}</h1>",
-                unsafe_allow_html=True)
-    st.markdown(f"<p style='font-size:1.2rem; color:#666; margin-top:0;'>"
-                f"{TAGLINE}</p>", unsafe_allow_html=True)
     st.markdown(
-        "<div style='margin: 2rem 0; color:#444; line-height:1.55; font-size:0.9rem;'>"
-        "From what you notice, how you reason, and the images you reach for, this "
-        "maps the shape of your mind — the kinds of work and the kinds of people "
-        "whose minds move like yours. Don't think too hard; it only works if you "
-        "don't try to sound smart."
-        "<br><br>"
-        "You will see seven short prompts. Answer each one honestly and "
-        "specifically — there are no right answers, and length is not the point. "
-        "Write the way you'd talk to a friend who's curious about you."
+        """
+        <style>
+        .stApp { background: radial-gradient(140% 460px at 50% -40px,
+            #6fae1a 0%, #8cc636 27%, #d6edb0 54%, #ffffff 84%) #ffffff !important; }
+        .int-hero { text-align:center; padding-top:1.2rem; }
+        .int-eyebrow { display:inline-block; background:#eaf6d6; color:#5ca701;
+            font-weight:700; font-size:0.95rem; padding:0.5rem 1.15rem;
+            border-radius:999px; font-family:system-ui,-apple-system,sans-serif; }
+        .int-headline { font-size:2.8rem; line-height:1.12; font-weight:700;
+            color:#1c2b16; margin:1.4rem 0 0; }
+        .int-lead { max-width:34rem; margin:1.8rem auto 0; color:#3f4a39;
+            line-height:1.6; font-size:1rem; text-align:center; }
+        .int-lead p { margin:0 0 1rem; }
+        .st-key-begin_btn { display:flex; justify-content:center; margin:1.9rem 0 0; }
+        .st-key-begin_btn button {
+            background:linear-gradient(180deg,#6fb81e 0%,#5ca701 100%) !important;
+            color:#ffffff !important; border:none !important; border-radius:999px !important;
+            padding:1rem 3.2rem !important; font-size:1.15rem !important;
+            font-weight:700 !important; font-family:system-ui,-apple-system,sans-serif !important;
+            box-shadow:0 0 0 9px rgba(124,181,24,0.18), 0 12px 26px rgba(92,167,1,0.30) !important; }
+        .int-feat { text-align:center; padding:2.4rem 0 0.4rem; }
+        .int-feat-h { font-size:1.85rem; font-weight:700; color:#1c2b16; margin:1rem 0 0.4rem; }
+        .int-feat-sub { color:#6a6a6a; font-size:1rem; margin:0 auto 1.5rem;
+            max-width:33rem; line-height:1.5; }
+        .int-panel { border-radius:26px; padding:1.4rem; margin:0 auto; max-width:38rem; }
+        .int-panel.green { background:linear-gradient(160deg,#7cb518,#5ca701); }
+        .int-panel.blue  { background:linear-gradient(160deg,#5b8fd0,#3b6fb5); }
+        .int-panel.amber { background:linear-gradient(160deg,#f0b366,#e0934a); }
+        .int-card { background:#fff; border-radius:16px; padding:1.4rem 1.3rem;
+            box-shadow:0 8px 20px rgba(0,0,0,0.10); text-align:left; }
+        .int-ctitle { font-weight:700; color:#1c2b16; font-size:1.1rem; margin:0 0 1rem; }
+        .int-row { display:grid; grid-template-columns:9rem 1fr 2.8rem; align-items:center;
+            gap:0.6rem; margin:0.5rem 0; }
+        .int-lbl { font-size:0.8rem; color:#333; }
+        .int-track { background:#efece6; border-radius:6px; height:0.75rem; overflow:hidden; }
+        .int-fill { display:block; height:100%; background:#2e2e2b; border-radius:6px; }
+        .int-pct { font-size:0.78rem; color:#888; text-align:right; font-family:system-ui,sans-serif; }
+        .int-crow { display:grid; grid-template-columns:2.2rem 1fr 3.2rem; align-items:center;
+            gap:0.5rem; padding:0.45rem 0; border-bottom:1px solid #f0eeea; }
+        .int-rank { font-size:0.76rem; color:#b3b3b3; font-family:system-ui,sans-serif; }
+        .int-cname { font-size:0.86rem; color:#222; }
+        .int-cpct { font-size:0.8rem; color:#3b6fb5; font-weight:700; text-align:right;
+            font-family:system-ui,sans-serif; }
+        .int-more { font-size:0.8rem; color:#999; padding-top:0.6rem; font-family:system-ui,sans-serif; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        "<div class='int-hero'>"
+        f"<span class='int-eyebrow'>{PRODUCT_NAME}</span>"
+        f"<h1 class='int-headline'>{TAGLINE}</h1>"
         "</div>",
         unsafe_allow_html=True,
     )
-    if st.button("Begin", key="begin_btn"):
+
+    clicked = st.button("Start with a test", key="begin_btn")
+
+    st.markdown(
+        "<div class='int-lead'>"
+        "<p>From what you notice, how you reason, and the images you reach for, this "
+        "maps the shape of your mind — the kinds of work and the kinds of people whose "
+        "minds move like yours. Don't think too hard; it only works if you don't try to "
+        "sound smart.</p>"
+        "<p>You will see seven short prompts. Answer each one honestly and specifically — "
+        "there are no right answers, and length is not the point. Write the way you'd talk "
+        "to a friend who's curious about you.</p>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <section class="int-feat">
+          <span class="int-eyebrow">Your mind, mapped</span>
+          <h2 class="int-feat-h">See the shape of how you think</h2>
+          <p class="int-feat-sub">Your eight intelligences, the way they balance in your writing. <em>(a sample result)</em></p>
+          <div class="int-panel green"><div class="int-card">
+            <div class="int-ctitle">Your profile</div>
+            <div class="int-row"><span class="int-lbl">Logical-Mathematical</span><span class="int-track"><span class="int-fill" style="width:100%"></span></span><span class="int-pct">24.3%</span></div>
+            <div class="int-row"><span class="int-lbl">Spatial</span><span class="int-track"><span class="int-fill" style="width:88.9%"></span></span><span class="int-pct">21.6%</span></div>
+            <div class="int-row"><span class="int-lbl">Bodily-Kinesthetic</span><span class="int-track"><span class="int-fill" style="width:77.8%"></span></span><span class="int-pct">18.9%</span></div>
+            <div class="int-row"><span class="int-lbl">Intrapersonal</span><span class="int-track"><span class="int-fill" style="width:55.6%"></span></span><span class="int-pct">13.5%</span></div>
+            <div class="int-row"><span class="int-lbl">Musical</span><span class="int-track"><span class="int-fill" style="width:33.3%"></span></span><span class="int-pct">8.1%</span></div>
+            <div class="int-row"><span class="int-lbl">Linguistic</span><span class="int-track"><span class="int-fill" style="width:33.3%"></span></span><span class="int-pct">8.1%</span></div>
+            <div class="int-row"><span class="int-lbl">Naturalistic</span><span class="int-track"><span class="int-fill" style="width:11.1%"></span></span><span class="int-pct">2.7%</span></div>
+            <div class="int-row"><span class="int-lbl">Interpersonal</span><span class="int-track"><span class="int-fill" style="width:11.1%"></span></span><span class="int-pct">2.7%</span></div>
+          </div></div>
+        </section>
+
+        <section class="int-feat">
+          <span class="int-eyebrow">Where you fit</span>
+          <h2 class="int-feat-h">The work whose minds move like yours</h2>
+          <p class="int-feat-sub">People whose profession asks for the same blend of intelligences you have. Top 20 by combined match.</p>
+          <div class="int-panel blue"><div class="int-card">
+            <div class="int-ctitle">Top career matches</div>
+            <div class="int-crow"><span class="int-rank">#01</span><span class="int-cname">Energy Auditors</span><span class="int-cpct">99.1%</span></div>
+            <div class="int-crow"><span class="int-rank">#02</span><span class="int-cname">Glass Blowers, Molders, Benders &amp; Finishers</span><span class="int-cpct">95.7%</span></div>
+            <div class="int-crow"><span class="int-rank">#03</span><span class="int-cname">Weatherization Installers &amp; Technicians</span><span class="int-cpct">95.5%</span></div>
+            <div class="int-crow"><span class="int-rank">#04</span><span class="int-cname">Boilermakers</span><span class="int-cpct">95.1%</span></div>
+            <div class="int-crow"><span class="int-rank">#05</span><span class="int-cname">Coin, Vending &amp; Amusement Machine Servicers</span><span class="int-cpct">94.5%</span></div>
+            <div class="int-crow"><span class="int-rank">#06</span><span class="int-cname">Control &amp; Valve Installers &amp; Repairers</span><span class="int-cpct">94.0%</span></div>
+            <div class="int-crow"><span class="int-rank">#07</span><span class="int-cname">Non-Destructive Testing Specialists</span><span class="int-cpct">93.7%</span></div>
+            <div class="int-crow"><span class="int-rank">#08</span><span class="int-cname">Potters, Manufacturing</span><span class="int-cpct">93.6%</span></div>
+            <div class="int-more">…and 12 more, down to Materials Scientists (90.5%)</div>
+          </div></div>
+        </section>
+
+        <section class="int-feat">
+          <span class="int-eyebrow">Your career map</span>
+          <h2 class="int-feat-h">Every career we know, placed by how it fits you</h2>
+          <p class="int-feat-sub">How well each fits the shape of your mind (across) and how close its day-to-day matches what you wrote (up). Your top 20 are colored; dot size is the match.</p>
+          <div class="int-panel amber"><div class="int-card">
+            <div class="int-ctitle">Your career map</div>
+            <svg viewBox="0 0 380 300" width="100%" style="display:block">
+              <line x1="48" y1="262" x2="360" y2="262" stroke="#ddd" stroke-width="1.5"/>
+              <line x1="48" y1="36" x2="48" y2="262" stroke="#ddd" stroke-width="1.5"/>
+              <text x="200" y="288" font-size="11" fill="#999" text-anchor="middle" font-family="system-ui,sans-serif">cognitive shape match &#8594;</text>
+              <text x="16" y="150" font-size="11" fill="#999" text-anchor="middle" font-family="system-ui,sans-serif" transform="rotate(-90 16 150)">content / interest match &#8594;</text>
+              <circle cx="317" cy="107" r="14" fill="#3b6fb5" opacity="0.9"/>
+              <circle cx="96"  cy="71"  r="12" fill="#a8c8e8" opacity="0.9"/>
+              <circle cx="149" cy="77"  r="12" fill="#e8862e" opacity="0.9"/>
+              <circle cx="166" cy="150" r="12" fill="#f0b48a" opacity="0.9"/>
+              <circle cx="241" cy="195" r="11" fill="#4a9e4a" opacity="0.9"/>
+              <circle cx="317" cy="211" r="10" fill="#d04a4a" opacity="0.9"/>
+              <circle cx="154" cy="159" r="10" fill="#e89ab0" opacity="0.9"/>
+              <circle cx="166" cy="174" r="10" fill="#7a4fb0" opacity="0.9"/>
+              <circle cx="149" cy="144" r="9"  fill="#9e3b3b" opacity="0.9"/>
+              <circle cx="108" cy="126" r="8"  fill="#e0a08a" opacity="0.9"/>
+              <circle cx="130" cy="190" r="3" fill="#cfcfcf"/>
+              <circle cx="190" cy="205" r="3" fill="#cfcfcf"/>
+              <circle cx="220" cy="170" r="3" fill="#cfcfcf"/>
+              <circle cx="90"  cy="150" r="3" fill="#cfcfcf"/>
+              <circle cx="260" cy="200" r="3" fill="#cfcfcf"/>
+            </svg>
+          </div></div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if clicked:
         st.session_state.started_at = time.time()
         st.session_state.q_timings = {}
         st.session_state.q_visits = {}
