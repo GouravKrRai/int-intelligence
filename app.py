@@ -646,18 +646,29 @@ def screen_welcome() -> None:
         .int-lead { max-width:34rem; margin:1.8rem auto 0; color:#3f4a39;
             line-height:1.6; font-size:1rem; text-align:center; }
         .int-lead p { margin:0 0 1rem; }
-        .st-key-begin_btn { display:flex !important; justify-content:center !important;
-            margin:1.9rem 0 0; }
-        .st-key-begin_btn > div { width:100%; display:flex !important;
-            justify-content:center !important; }
-        .st-key-begin_btn button {
-            background:linear-gradient(180deg,#6fb81e 0%,#5ca701 100%) !important;
-            color:#ffffff !important; border:none !important; border-radius:999px !important;
-            padding:1.2rem 3.8rem !important; font-size:1.45rem !important;
-            font-weight:800 !important; font-family:system-ui,-apple-system,sans-serif !important;
-            box-shadow:0 0 0 9px rgba(124,181,24,0.18), 0 12px 26px rgba(92,167,1,0.30) !important; }
-        .st-key-begin_btn button p, .st-key-begin_btn button div {
-            font-size:1.45rem !important; font-weight:800 !important; }
+        .st-key-begin_btn { margin:1.9rem 0 0; }
+        /* high-specificity so Streamlit's themed button bg can't win */
+        .stApp div[class*="st-key-begin_btn"] button {
+            background-image:linear-gradient(180deg,#6fb81e 0%,#5ca701 100%) !important;
+            background-color:#5ca701 !important;
+            color:#ffffff !important;
+            border:2px solid #5ca701 !important; border-radius:999px !important;
+            padding:1.2rem 3.8rem !important;
+            box-shadow:0 0 0 9px rgba(124,181,24,0.18), 0 12px 26px rgba(92,167,1,0.30) !important;
+            transition:background-color .15s ease, color .15s ease; }
+        .stApp div[class*="st-key-begin_btn"] button p,
+        .stApp div[class*="st-key-begin_btn"] button span,
+        .stApp div[class*="st-key-begin_btn"] button div {
+            color:#ffffff !important; font-size:1.45rem !important; font-weight:800 !important;
+            font-family:system-ui,-apple-system,sans-serif !important; }
+        /* hover: white background, green text */
+        .stApp div[class*="st-key-begin_btn"] button:hover {
+            background-image:none !important; background-color:#ffffff !important;
+            border:2px solid #5ca701 !important; }
+        .stApp div[class*="st-key-begin_btn"] button:hover p,
+        .stApp div[class*="st-key-begin_btn"] button:hover span,
+        .stApp div[class*="st-key-begin_btn"] button:hover div {
+            color:#2e8f5b !important; }
         .int-feat { text-align:center; padding:2.4rem 0 0.4rem; }
         .int-feat-h { font-size:1.85rem; font-weight:700; color:#1c2b16; margin:1rem 0 0.4rem; }
         .int-feat-sub { color:#6a6a6a; font-size:1rem; margin:0 auto 1.5rem;
